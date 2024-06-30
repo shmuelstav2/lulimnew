@@ -4,6 +4,7 @@
 # Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
 import pandas as pd
 import openpyxl
+from sqlalchemy import text
 import pandas as pd
 from datetime import datetime, timedelta, date
 from sqlalchemy import create_engine
@@ -175,34 +176,25 @@ def udate_skila():
     farms_names = subfolder_names(excel_prod + farms)
     tmuta_results = pd.DataFrame()
     for farm in farms_names:
-        # check if excel file has changed
-        path = excel_prod + farms + '\\' + farm + excel_middle_name + excel_file_name_finish + farm + excel_end
+        path = f"{excel_prod}{farms}\\{farm}{excel_middle_name}{excel_file_name_finish}{farm}{excel_end}"
         data = read_excel(path, sheet_name_skila)
-        if not data.empty and farm !='sigler' :
+
+        if not data.empty and farm != 'sigler':
             data = data.replace('', np.nan)
 
-            # Drop rows where all elements are NaN
-            df_cleaned = data.dropna(how='all')
+            # Drop rows and columns where all elements are NaN
+            df_cleaned = data.dropna(how='all').dropna(axis=1, how='all')
 
-            # Drop columns where all elements are NaN
-            df_cleaned = df_cleaned.dropna(axis=1, how='all')
             columns_to_keep = [0, 1, 6, 7]
-            df_cleaned = df_cleaned.iloc[:, columns_to_keep]
-            df_cleaned = df_cleaned.dropna()
+            df_cleaned = df_cleaned.iloc[:, columns_to_keep].dropna()
 
-            new_columns = df_cleaned.iloc[0]  # Get the first row
-
-            # Step 2: Drop the first row from the DataFrame
-            df_cleaned = df_cleaned[1:]  # Drop the first row
-
-            # Step 3: Set new column names
+            new_columns = df_cleaned.iloc[0]
+            df_cleaned = df_cleaned[1:]
             df_cleaned.columns = new_columns
-
-            # Optional: Reset the index if needed
             df_cleaned = df_cleaned.reset_index(drop=True)
+
+            # Create new DataFrame for SQL
             df = pd.DataFrame()
-
-
             df['grotwh_day'] = pd.to_numeric(df_cleaned['יום'])
             df['avg_mixed'] = pd.to_numeric(df_cleaned['ממוצע מעורב'])
             df['avg_mixed_percent'] = pd.to_numeric(df_cleaned['אחוז תקן מעורב'])
@@ -210,41 +202,49 @@ def udate_skila():
             df['midgar'] = 1
             df['farm_name'] = str(farm)
 
-            existing_data = pd.read_sql('SELECT * FROM skila_svuit', con=engine)
+            # Load existing data and normalize
+            existing_data = pd.read_sql('SELECT grotwh_day, mivne, midgar, farm_name FROM skila_svuit', con=engine)
+            existing_data = existing_data.astype(
+                {'grotwh_day': 'int64', 'mivne': 'int64', 'midgar': 'int64', 'farm_name': 'str'})
+            existing_data.set_index(['grotwh_day', 'mivne', 'midgar', 'farm_name'], inplace=True)
 
-            # Normalize data for comparison
-            df['grotwh_day'] = pd.to_numeric(df['grotwh_day'])
-            df['avg_mixed'] = pd.to_numeric(df['avg_mixed'])
-            df['avg_mixed_percent'] = pd.to_numeric(df['avg_mixed_percent'])
-            df['mivne'] = pd.to_numeric(df['mivne'])
-            df['midgar'] = pd.to_numeric(df['midgar'])
-            df['farm_name'] = df['farm_name'].astype(str)
-
-            existing_data['grotwh_day'] = pd.to_numeric(existing_data['grotwh_day'])
-            existing_data['avg_mixed'] = pd.to_numeric(existing_data['avg_mixed'])
-            existing_data['avg_mixed_percent'] = pd.to_numeric(existing_data['avg_mixed_percent'])
-            existing_data['mivne'] = pd.to_numeric(existing_data['mivne'])
-            existing_data['midgar'] = pd.to_numeric(existing_data['midgar'])
-            existing_data['farm_name'] = existing_data['farm_name'].astype(str)
-
-            # Use composite key for comparison
-            composite_key = ['grotwh_day', 'mivne', 'midgar', 'farm_name']
-            existing_data.set_index(composite_key, inplace=True)
-            df.set_index(composite_key, inplace=True)
+            df = df.astype({'grotwh_day': 'int64', 'mivne': 'int64', 'midgar': 'int64', 'farm_name': 'str'})
+            df.set_index(['grotwh_day', 'mivne', 'midgar', 'farm_name'], inplace=True)
 
             # Identify new rows
             new_rows = df[~df.index.isin(existing_data.index)].reset_index()
 
-            # Insert new rows into the SQL table
+            # Upsert logic: Insert new rows and update existing ones
             if not new_rows.empty:
-                new_rows.to_sql('skila_svuit', con=engine, if_exists='append', index=False)
-                print("Inserted new rows successfully.")
+                with engine.begin() as connection:
+                    for _, row in new_rows.iterrows():
+                        stmt = text("""
+                        MERGE INTO skila_svuit AS target
+                        USING (SELECT :grotwh_day AS grotwh_day, :mivne AS mivne, :midgar AS midgar, :farm_name AS farm_name) AS source
+                        ON target.grotwh_day = source.grotwh_day AND target.mivne = source.mivne AND target.midgar = source.midgar AND target.farm_name = source.farm_name
+                        WHEN MATCHED THEN
+                            UPDATE SET avg_mixed = :avg_mixed, avg_mixed_percent = :avg_mixed_percent
+                        WHEN NOT MATCHED THEN
+                            INSERT (grotwh_day, mivne, midgar, farm_name, avg_mixed, avg_mixed_percent)
+                            VALUES (:grotwh_day, :mivne, :midgar, :farm_name, :avg_mixed, :avg_mixed_percent);
+                        """)
+                        params = {
+                            'grotwh_day': row['grotwh_day'],
+                            'mivne': row['mivne'],
+                            'midgar': row['midgar'],
+                            'farm_name': row['farm_name'],
+                            'avg_mixed': row['avg_mixed'],
+                            'avg_mixed_percent': row['avg_mixed_percent']
+                        }
+                        connection.execute(stmt, params)  # Use params dictionary
+                print(f"Upserted rows successfully for {farm}.")
             else:
-                print("No new rows to insert-"+farm)
-    df_view = pd.read_sql("SELECT * FROM dbo.skila_svuit_highest_grotwh_day;", con=engine)
-    write_to_mongo_and_delete(df_view,'lulim_new','skila')
-    print('בכרבר')
+                print(f"No new rows to upsert for {farm}.")
 
+    # Fetch data and write to MongoDB
+    df_view = pd.read_sql("SELECT * FROM dbo.skila_svuit_highest_grotwh_day;", con=engine)
+    write_to_mongo_and_delete(df_view, 'lulim_new', 'skila')
+    print('בכרבר')
 
 
 
