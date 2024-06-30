@@ -172,6 +172,30 @@ def write_to_mongo_and_delete (df,db_name,collection_name):
 
     # Close the MongoDB connection
     client.close()
+def translate(farm):
+    translations = {
+        'gotliv 5': 'גוטליב 4',
+        'gotliv 2': 'גוטליב 2',
+        'megadim': 'מגדים',
+        'megido': 'מגידו',
+        'ranen': 'רנן',
+        'shaal moyal': 'שעל מויאל',
+        'kalanit': 'כלנית',
+        'ramat zvi haim': 'רמת צבי חיים',
+        'ramat zvi moshe': 'רמת צבי משה',
+        'ramot naftali': 'רמות נפתלי',
+        'ranen': 'רנן',
+        'shaal moyal': 'שעל מויאל',
+        'musayel': 'מוסייל',
+        'sigler': 'סיגלר',
+        'gazit': 'גזית',
+        'sadmot dvora': 'שדמות דבורה',
+        'mawiya': 'מעוואיה',
+        'sharona': 'שרונה'
+        # Add more translations as needed
+    }
+    return translations.get(farm, 'Translation not found')
+
 def udate_skila():
     farms_names = subfolder_names(excel_prod + farms)
     tmuta_results = pd.DataFrame()
@@ -200,7 +224,7 @@ def udate_skila():
             df['avg_mixed_percent'] = pd.to_numeric(df_cleaned['אחוז תקן מעורב'])
             df['mivne'] = pd.to_numeric(df_cleaned['מבנה'])
             df['midgar'] = 1
-            df['farm_name'] = str(farm)
+            df['farm_name'] = str(translate(farm))
 
             # Load existing data and normalize
             existing_data = pd.read_sql('SELECT grotwh_day, mivne, midgar, farm_name FROM skila_svuit', con=engine)
