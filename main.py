@@ -172,14 +172,16 @@ def write_to_mongo_and_delete (df,db_name,collection_name):
 
     # Close the MongoDB connection
     client.close()
+
+
 def translate(farm):
     translations = {
-        'gotliv 5': 'גוטליב 4',
+        'gotliv 4': 'גוטליב 4',
         'gotliv 2': 'גוטליב 2',
         'megadim': 'מגדים',
         'megido': 'מגידו',
         'ranen': 'רנן',
-        'shaal moyal': 'שעל מויאל',
+        'shaal morad': 'שעל מורד',
         'kalanit': 'כלנית',
         'ramat zvi haim': 'רמת צבי חיים',
         'ramat zvi moshe': 'רמת צבי משה',
@@ -194,7 +196,14 @@ def translate(farm):
         'sharona': 'שרונה'
         # Add more translations as needed
     }
-    return translations.get(farm, 'Translation not found')
+
+    # Check if farm exists in translations dictionary
+    if farm in translations:
+        return translations[farm]
+    else:
+        print(f"Translation not found for '{farm}'")
+        return f"Translation not found for '{farm}'"
+
 
 def udate_skila():
     farms_names = subfolder_names(excel_prod + farms)
@@ -203,7 +212,7 @@ def udate_skila():
         path = f"{excel_prod}{farms}\\{farm}{excel_middle_name}{excel_file_name_finish}{farm}{excel_end}"
         data = read_excel(path, sheet_name_skila)
 
-        if not data.empty and farm != 'sigler':
+        if not data.empty:
             data = data.replace('', np.nan)
 
             # Drop rows and columns where all elements are NaN
@@ -225,6 +234,8 @@ def udate_skila():
             df['mivne'] = pd.to_numeric(df_cleaned['מבנה'])
             df['midgar'] = 1
             df['farm_name'] = str(translate(farm))
+            df['avg_mixed'] = df['avg_mixed'].round(3)
+            df['avg_mixed_percent'] = df['avg_mixed_percent'].round(3)
 
             # Load existing data and normalize
             existing_data = pd.read_sql('SELECT grotwh_day, mivne, midgar, farm_name FROM skila_svuit', con=engine)
@@ -269,6 +280,140 @@ def udate_skila():
     df_view = pd.read_sql("SELECT * FROM dbo.skila_svuit_highest_grotwh_day;", con=engine)
     write_to_mongo_and_delete(df_view, 'lulim_new', 'skila')
     print('בכרבר')
+
+def udate_tmuta():
+    farms_names = subfolder_names(excel_prod + farms)
+
+    for farm in farms_names:
+        path = f"{excel_prod}{farms}\\{farm}{excel_middle_name}{excel_file_name_finish}{farm}{excel_end}"
+        data = read_excel(path, sheet_name_tmuta)
+
+        if not data.empty and farm != 'sigler':
+            data = data.replace('', np.nan)
+
+            # Drop rows and columns where all elements are NaN
+            df_cleaned = data.dropna(how='all').dropna(axis=1, how='all')
+            if not df_cleaned.empty:
+                threshold = 5
+                # Delete columns with fewer non-null values than the threshold
+                df_cleaned = df_cleaned.dropna(axis=1, thresh=threshold)
+                df_cleaned = df_cleaned.dropna(axis=0, thresh=threshold)
+                df_cleaned.columns = df_cleaned.iloc[0]
+                df_cleaned = df_cleaned.iloc[1:]
+                df_cleaned = df_cleaned.reset_index(drop=True)
+                df_cleaned = df_cleaned[df_cleaned['mixed daily mortality'] > 0]
+
+            if not df_cleaned.empty:
+                # Create new DataFrame for SQL
+                df = pd.DataFrame()
+
+                # Assuming df_cleaned is your original DataFrame
+
+                # Convert columns to numeric
+
+                # Create the engine (Replace with your actual connection string)
+
+                # Convert columns to appropriate data types
+                df_cleaned['site'] = pd.to_numeric(df_cleaned['site'])
+                df_cleaned['house_number'] = pd.to_numeric(df_cleaned['house number'])
+                df_cleaned['parent_flock'] = pd.to_numeric(df_cleaned['perent flock'])
+                df_cleaned['mixed_start'] = pd.to_numeric(df_cleaned['mixed start quantity'])
+                df_cleaned['daily_mortality'] = pd.to_numeric(df_cleaned['daily mortality'])
+                df_cleaned['growth day'] = pd.to_numeric(df_cleaned['growth day'])
+                # Convert columns to string
+                df_cleaned['farm_name'] = df_cleaned['farm name'].astype(str)
+                df_cleaned['hatchery'] = df_cleaned['hatchery'].astype(str)
+                df_cleaned['line'] = df_cleaned['line'].astype(str)
+
+                # Convert 'date' to datetime
+                df_cleaned['date'] = pd.to_datetime(df_cleaned['date'])
+
+                # Read existing data from the database
+                # Read existing data from the database
+                existing_data = pd.read_sql('SELECT grotwh_day, mivne, midgar, farm_name FROM skila_svuit', con=engine)
+                existing_data = existing_data.astype(
+                    {'grotwh_day': 'int64', 'mivne': 'int64', 'midgar': 'int64', 'farm_name': 'str'})
+                existing_data.set_index(['grotwh_day', 'mivne', 'midgar', 'farm_name'], inplace=True)
+
+                # Ensure df_cleaned has required columns for further processing
+                required_columns_df = ['growth day', 'site', 'house_number', 'farm_name', 'hatchery', 'line', 'date',
+                                       'mixed_start', 'daily_mortality']
+                missing_columns_df = [col for col in required_columns_df if col not in df_cleaned.columns]
+
+                if missing_columns_df:
+                    print(f"Missing columns in df_cleaned for further processing: {missing_columns_df}")
+                else:
+                    # Create a new DataFrame df based on df_cleaned with required columns
+                    df = df_cleaned[
+                        ['growth day', 'site', 'house_number', 'farm_name', 'hatchery', 'line', 'date', 'mixed_start',
+                         'daily_mortality']]
+
+                    # Convert new DataFrame columns to appropriate types
+                    df = df.astype(
+                        {'growth day': 'int64', 'site': 'int64', 'house_number': 'int64', 'farm_name': 'str'})
+                    df.set_index(['growth day', 'site', 'house_number', 'farm_name'], inplace=True)
+
+                    # Identify new rows
+                    new_rows = df[~df.index.isin(existing_data.index)].reset_index()
+
+                    # Upsert logic: Insert new rows and update existing ones
+                    if not new_rows.empty:
+                        with engine.begin() as connection:
+                            for _, row in new_rows.iterrows():
+
+                                stmt = text("""
+                                                MERGE INTO tmuta AS target
+                                                USING (SELECT :growth_day AS growth_day, 
+                                                              :site AS site, 
+                                                              :house_number AS house_number, 
+                                                              :parent_flock AS parent_flock, 
+                                                              :farm_name AS farm_name, 
+                                                              :hatchery AS hatchery, 
+                                                              :line AS line, 
+                                                              :date AS date, 
+                                                              :mixed_start_quantity AS mixed_start_quantity, 
+                                                              :daily_mortality AS daily_mortality) AS source
+                                                ON target.growth_day = source.growth_day 
+                                                   AND target.site = source.site 
+                                                   AND target.house_number = source.house_number 
+                                                   AND target.parent_flock = source.parent_flock 
+                                                   AND target.farm_name = source.farm_name 
+                                                   AND target.hatchery = source.hatchery 
+                                                   AND target.line = source.line 
+                                                   AND target.date = source.date
+                                                WHEN MATCHED THEN
+                                                    UPDATE SET target.mixed_start_quantity = source.mixed_start_quantity, 
+                                                               target.daily_mortality = source.daily_mortality
+                                                WHEN NOT MATCHED BY TARGET THEN
+                                                    INSERT (growth_day, site, house_number, parent_flock, farm_name, hatchery, line, date, mixed_start_quantity, daily_mortality)
+                                                    VALUES (:growth_day, :site, :house_number, :parent_flock, :farm_name, :hatchery, :line, :date, :mixed_start_quantity, :daily_mortality);
+                                            """)
+                                params = {
+                                    'growth_day': row['growth day'],
+                                    'site': row['site'],
+                                    'house_number': row['house_number'],
+                                    'parent_flock': 0,
+                                    'farm_name': row['farm_name'],
+                                    'hatchery': row['hatchery'],
+                                    'line': row['line'],
+                                    'date': row['date'],
+                                    'mixed_start_quantity': row['mixed_start'],
+                                    'daily_mortality': row['daily_mortality']
+                                }
+                                connection.execute(stmt, params)
+                                print("success")
+                        print("Upserted rows successfully.")
+                    else:
+                        print("No new rows to upsert.")
+
+                        # Fetch data and write to MongoDB
+                    df_view = pd.read_sql("SELECT * FROM dbo.skila_svuit_highest_grotwh_day;", con=engine)
+
+                    # Assuming write_to_mongo_and_delete is a defined function
+                    write_to_mongo_and_delete(df_view, 'lulim_new', 'tmuta')
+
+
+
 
 
 
@@ -476,6 +621,7 @@ def update_results():
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     udate_skila()
+    #udate_tmuta()
     #update_data()
     #update_results()
 
