@@ -282,13 +282,13 @@ def udate_skila():
     print('בכרבר')
 
 def udate_tmuta():
+    #run over all the farm files
     farms_names = subfolder_names(excel_prod + farms)
-
     for farm in farms_names:
         path = f"{excel_prod}{farms}\\{farm}{excel_middle_name}{excel_file_name_finish}{farm}{excel_end}"
         data = read_excel(path, sheet_name_tmuta)
 
-        if not data.empty and farm != 'sigler':
+        if not data.empty:
             data = data.replace('', np.nan)
 
             # Drop rows and columns where all elements are NaN
@@ -306,14 +306,9 @@ def udate_tmuta():
             if not df_cleaned.empty:
                 # Create new DataFrame for SQL
                 df = pd.DataFrame()
-
-                # Assuming df_cleaned is your original DataFrame
-
-                # Convert columns to numeric
-
-                # Create the engine (Replace with your actual connection string)
-
-                # Convert columns to appropriate data types
+                df_cleaned['site'] = df_cleaned['site'].astype(str)
+                df_cleaned['site'] = df_cleaned['site'].str.split('.').str[0]
+                df_cleaned['site'] = pd.to_numeric(df_cleaned['site'])
                 df_cleaned['site'] = pd.to_numeric(df_cleaned['site'])
                 df_cleaned['house_number'] = pd.to_numeric(df_cleaned['house number'])
                 df_cleaned['parent_flock'] = pd.to_numeric(df_cleaned['perent flock'])
@@ -325,11 +320,14 @@ def udate_tmuta():
                 df_cleaned['hatchery'] = df_cleaned['hatchery'].astype(str)
                 df_cleaned['line'] = df_cleaned['line'].astype(str)
 
-                # Convert 'date' to datetime
-                df_cleaned['date'] = pd.to_datetime(df_cleaned['date'])
+                try: # Convert 'date' to datetime
+                    df_cleaned['date'] = pd.to_datetime(df_cleaned['date'])
+                except:
+                    print("error "+farm)
 
                 # Read existing data from the database
                 # Read existing data from the database
+                print('now '+farm)
                 existing_data = pd.read_sql('SELECT grotwh_day, mivne, midgar, farm_name FROM skila_svuit', con=engine)
                 existing_data = existing_data.astype(
                     {'grotwh_day': 'int64', 'mivne': 'int64', 'midgar': 'int64', 'farm_name': 'str'})
@@ -360,48 +358,52 @@ def udate_tmuta():
                     if not new_rows.empty:
                         with engine.begin() as connection:
                             for _, row in new_rows.iterrows():
+                                try:
+                                    stmt = text("""
+                                            MERGE INTO tmuta AS target
+                                            USING (SELECT :growth_day AS growth_day, 
+                                                          :site AS site, 
+                                                          :house_number AS house_number, 
+                                                          :parent_flock AS parent_flock, 
+                                                          :farm_name AS farm_name, 
+                                                          :hatchery AS hatchery, 
+                                                          :line AS line, 
+                                                          :date AS date, 
+                                                          :mixed_start_quantity AS mixed_start_quantity, 
+                                                          :daily_mortality AS daily_mortality) AS source
+                                            ON target.growth_day = source.growth_day 
+                                               AND target.site = source.site 
+                                               AND target.house_number = source.house_number 
+                                               AND target.parent_flock = source.parent_flock 
+                                               AND target.farm_name = source.farm_name 
+                                               AND target.hatchery = source.hatchery 
+                                               AND target.line = source.line 
+                                               AND target.date = source.date
+                                            WHEN MATCHED THEN
+                                                UPDATE SET target.mixed_start_quantity = source.mixed_start_quantity, 
+                                                           target.daily_mortality = source.daily_mortality
+                                            WHEN NOT MATCHED BY TARGET THEN
+                                                INSERT (growth_day, site, house_number, parent_flock, farm_name, hatchery, line, date, mixed_start_quantity, daily_mortality)
+                                                VALUES (:growth_day, :site, :house_number, :parent_flock, :farm_name, :hatchery, :line, :date, :mixed_start_quantity, :daily_mortality);
+                                        """)
 
-                                stmt = text("""
-                                                MERGE INTO tmuta AS target
-                                                USING (SELECT :growth_day AS growth_day, 
-                                                              :site AS site, 
-                                                              :house_number AS house_number, 
-                                                              :parent_flock AS parent_flock, 
-                                                              :farm_name AS farm_name, 
-                                                              :hatchery AS hatchery, 
-                                                              :line AS line, 
-                                                              :date AS date, 
-                                                              :mixed_start_quantity AS mixed_start_quantity, 
-                                                              :daily_mortality AS daily_mortality) AS source
-                                                ON target.growth_day = source.growth_day 
-                                                   AND target.site = source.site 
-                                                   AND target.house_number = source.house_number 
-                                                   AND target.parent_flock = source.parent_flock 
-                                                   AND target.farm_name = source.farm_name 
-                                                   AND target.hatchery = source.hatchery 
-                                                   AND target.line = source.line 
-                                                   AND target.date = source.date
-                                                WHEN MATCHED THEN
-                                                    UPDATE SET target.mixed_start_quantity = source.mixed_start_quantity, 
-                                                               target.daily_mortality = source.daily_mortality
-                                                WHEN NOT MATCHED BY TARGET THEN
-                                                    INSERT (growth_day, site, house_number, parent_flock, farm_name, hatchery, line, date, mixed_start_quantity, daily_mortality)
-                                                    VALUES (:growth_day, :site, :house_number, :parent_flock, :farm_name, :hatchery, :line, :date, :mixed_start_quantity, :daily_mortality);
-                                            """)
-                                params = {
-                                    'growth_day': row['growth day'],
-                                    'site': row['site'],
-                                    'house_number': row['house_number'],
-                                    'parent_flock': 0,
-                                    'farm_name': row['farm_name'],
-                                    'hatchery': row['hatchery'],
-                                    'line': row['line'],
-                                    'date': row['date'],
-                                    'mixed_start_quantity': row['mixed_start'],
-                                    'daily_mortality': row['daily_mortality']
-                                }
-                                connection.execute(stmt, params)
-                                print("success")
+                                    params = {
+                                        'growth_day': row['growth day'],
+                                        'site': row['site'],
+                                        'house_number': row['house_number'],
+                                        'parent_flock': 0,
+                                        'farm_name': row['farm_name'],
+                                        'hatchery': row['hatchery'],
+                                        'line': row['line'],
+                                        'date': row['date'],
+                                        'mixed_start_quantity': row['mixed_start'],
+                                        'daily_mortality': row['daily_mortality']
+                                    }
+
+                                    connection.execute(stmt, params)
+                                    print("success"+farm)
+                                except Exception as e:
+                                    print(f"An error occurred: {e}")
                         print("Upserted rows successfully.")
                     else:
                         print("No new rows to upsert.")
@@ -411,6 +413,36 @@ def udate_tmuta():
 
                     # Assuming write_to_mongo_and_delete is a defined function
                     write_to_mongo_and_delete(df_view, 'lulim_new', 'tmuta')
+
+
+
+
+def udate_sivuk():
+    farms_names = subfolder_names(excel_prod + farms)
+    sivuk_results = pd.DataFrame()
+    for farm in farms_names:
+        # check if excel file has changed
+        path = excel_prod + farms + '\\' + farm + excel_middle_name + excel_file_name_finish + farm + excel_end
+        data = read_excel(path, sheet_name_sivuk)
+        if not data.empty:
+            threshold = 5
+            # Delete columns with fewer non-null values than the threshold
+            data = data.dropna(axis=1, thresh=threshold)
+            data = data.dropna(axis=0, thresh=threshold)
+            data.columns = data.iloc[0]
+            data = data.iloc[1:]
+            data = data.reset_index(drop=True)
+            data['neto weight '] = pd.to_numeric(data['neto weight '], errors='coerce')
+            data = data[data['neto weight '] > 0]
+            sivuk_results = pd.concat([sivuk_results, data], ignore_index=True)
+
+    # Convert the 'marketing date' column to a datetime format
+    sivuk_results['marketing date'] = pd.to_datetime(sivuk_results['marketing date'], format='%d.%m.%y')
+
+    # Format the datetime objects without leading zeros
+    sivuk_results['marketing date'] = sivuk_results['marketing date'].dt.strftime('%Y.%m.%d')
+
+
 
 
 
@@ -614,14 +646,14 @@ def update_results():
     write_to_mongo_and_delete(agg_sivuk_small, 'lulim_new', 'sivuk_end')
 
 
-
-
+# function that calculates diff between 2 dates
 
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     udate_skila()
-    #udate_tmuta()
+    udate_tmuta()
+    #update_sivuk()
     #update_data()
     #update_results()
 
