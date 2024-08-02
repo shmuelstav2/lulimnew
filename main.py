@@ -410,11 +410,11 @@ def udate_tmuta():
 
                         # Fetch data and write to MongoDB
                     df_view = pd.read_sql("SELECT * FROM dbo.skila_svuit_highest_grotwh_day;", con=engine)
-                    df_view2 = pd.read_sql("SELECT * FROM dbo.tmuta14;", con=engine)
+                    df_view2 = pd.read_sql("SELECT [שם חווה],[כמות התחלתית],[תמותה כוללת],[יום גידול],[אחוז תמותה כולל],[יום עדכון אחרון] FROM tmuta14 ORDER BY [data_taken_date];", con=engine)
 
                     # Assuming write_to_mongo_and_delete is a defined function
                     write_to_mongo_and_delete(df_view, 'lulim_new', 'tmuta')
-                    write_to_mongo_and_delete(df_view, 'lulim_new', 'tmuta14')
+                    write_to_mongo_and_delete(df_view2, 'lulim_new', 'tmuta14')
 
 
 
