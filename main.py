@@ -236,6 +236,7 @@ def udate_skila():
             df['farm_name'] = str(translate(farm))
             df['avg_mixed'] = df['avg_mixed'].round(3)
             df['avg_mixed_percent'] = df['avg_mixed_percent'].round(3)
+            df = df[~((df['avg_mixed'] == 0) & (df['avg_mixed_percent'] == 0))]
 
             # Load existing data and normalize
             existing_data = pd.read_sql('SELECT grotwh_day, mivne, midgar, farm_name FROM skila_svuit', con=engine)
@@ -411,15 +412,44 @@ def udate_tmuta():
                         # Fetch data and write to MongoDB
                     df_view = pd.read_sql("SELECT * FROM dbo.skila_svuit_highest_grotwh_day;", con=engine)
                     df_view2 = pd.read_sql("SELECT [שם חווה],[כמות התחלתית],[תמותה כוללת],[יום גידול],[אחוז תמותה כולל],[יום עדכון אחרון] FROM tmuta14 ORDER BY [data_taken_date] desc;", con=engine)
-
+                    df_view3 = pd.read_sql("SELECT * FROM dbo.skila_svuit_highest_grotwh_day;", con=engine)
                     # Assuming write_to_mongo_and_delete is a defined function
                     write_to_mongo_and_delete(df_view, 'lulim_new', 'tmuta')
                     write_to_mongo_and_delete(df_view2, 'lulim_new', 'tmuta14')
 
 
-
-
-def udate_sivuk():
+def insert_data_to_sql(df, table_name):
+    with engine.begin() as connection:
+        for _, row in df.iterrows():
+            stmt = text("""
+                MERGE INTO sivuk AS target
+                USING (SELECT :marketing_date AS marketing_date, :house AS house, :receipt AS receipt,
+                              :destination AS destination, :marketed_quantity AS marketed_quantity,
+                              :averrage_weight AS averrage_weight, :marketed_age AS marketed_age,
+                              :farm_name AS farm_name) AS source
+                ON target.marketing_date = source.marketing_date AND target.house = source.house
+                   AND target.receipt = source.receipt AND target.destination = source.destination
+                   AND target.marketed_quantity = source.marketed_quantity AND target.averrage_weight = source.averrage_weight
+                   AND target.marketed_age = source.marketed_age AND target.farm_name = source.farm_name
+                WHEN MATCHED THEN
+                    UPDATE SET marketed_quantity = :marketed_quantity, averrage_weight = :averrage_weight,
+                               marketed_age = :marketed_age, farm_name = :farm_name
+                WHEN NOT MATCHED THEN
+                    INSERT (marketing_date, house, receipt, destination, marketed_quantity, averrage_weight, marketed_age, farm_name)
+                    VALUES (:marketing_date, :house, :receipt, :destination, :marketed_quantity, :averrage_weight, :marketed_age, :farm_name);
+            """)
+            params = {
+                'marketing_date': row['marketing date'],
+                'house': row['house'],
+                'receipt': row['receipt'],
+                'destination': row['destination'],
+                'marketed_quantity': row['marketed quantity'],
+                'averrage_weight': row['averrage weight '],
+                'marketed_age': row['marketed age'],
+                'farm_name': row['farm name']
+            }
+            connection.execute(stmt, params)
+def update_sivuk():
     farms_names = subfolder_names(excel_prod + farms)
     sivuk_results = pd.DataFrame()
     for farm in farms_names:
@@ -443,7 +473,7 @@ def udate_sivuk():
 
     # Format the datetime objects without leading zeros
     sivuk_results['marketing date'] = sivuk_results['marketing date'].dt.strftime('%Y.%m.%d')
-
+    insert_data_to_sql(sivuk_results, 'sivuk')
 
 
 
@@ -655,7 +685,7 @@ def update_results():
 if __name__ == '__main__':
     udate_skila()
     udate_tmuta()
-    #update_sivuk()
+    update_sivuk()
     #update_data()
     #update_results()
 
