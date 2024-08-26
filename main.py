@@ -74,7 +74,7 @@ excel_file_name_finish = 'current flock '
 excel_end = '.xlsx'''
 excel_middle_name = '\\current flock\\'
 
-
+farms_new_folk = {}
 #Functions
 def read_excel(path, sheet_name):
 
@@ -232,50 +232,53 @@ def udate_skila():
             df['avg_mixed'] = pd.to_numeric(df_cleaned['ממוצע מעורב'])
             df['avg_mixed_percent'] = pd.to_numeric(df_cleaned['אחוז תקן מעורב'])
             df['mivne'] = pd.to_numeric(df_cleaned['מבנה'])
-            df['midgar'] = 1
-            df['farm_name'] = str(translate(farm))
-            df['avg_mixed'] = df['avg_mixed'].round(3)
-            df['avg_mixed_percent'] = df['avg_mixed_percent'].round(3)
-            df = df[~((df['avg_mixed'] == 0) & (df['avg_mixed_percent'] == 0))]
+            if not df.empty:
+                new_flock = 'new_flock'  # Define the new flock column name
+                df[new_flock] = farms_new_folk[farm]
+                #df['midgar'] = 1
+                df['farm_name'] = str(translate(farm))
+                df['avg_mixed'] = df['avg_mixed'].round(3)
+                df['avg_mixed_percent'] = df['avg_mixed_percent'].round(3)
+                df = df[~((df['avg_mixed'] == 0) & (df['avg_mixed_percent'] == 0))]
+    
+                # Load existing data and normalize
+                existing_data = pd.read_sql('SELECT grotwh_day, mivne, new_flock, farm_name FROM skila_svuit', con=engine)
+                existing_data = existing_data.astype(
+                    {'grotwh_day': 'int64', 'mivne': 'int64', 'new_flock': 'int64', 'farm_name': 'str'})
+                existing_data.set_index(['grotwh_day', 'mivne', 'new_flock', 'farm_name'], inplace=True)
 
-            # Load existing data and normalize
-            existing_data = pd.read_sql('SELECT grotwh_day, mivne, midgar, farm_name FROM skila_svuit', con=engine)
-            existing_data = existing_data.astype(
-                {'grotwh_day': 'int64', 'mivne': 'int64', 'midgar': 'int64', 'farm_name': 'str'})
-            existing_data.set_index(['grotwh_day', 'mivne', 'midgar', 'farm_name'], inplace=True)
+                df = df.astype({'grotwh_day': 'int64', 'mivne': 'int64', 'new_flock': 'int64', 'farm_name': 'str'})
+                df.set_index(['grotwh_day', 'mivne', 'new_flock', 'farm_name'], inplace=True)
 
-            df = df.astype({'grotwh_day': 'int64', 'mivne': 'int64', 'midgar': 'int64', 'farm_name': 'str'})
-            df.set_index(['grotwh_day', 'mivne', 'midgar', 'farm_name'], inplace=True)
+                # Identify new rows
+                new_rows = df[~df.index.isin(existing_data.index)].reset_index()
 
-            # Identify new rows
-            new_rows = df[~df.index.isin(existing_data.index)].reset_index()
-
-            # Upsert logic: Insert new rows and update existing ones
-            if not new_rows.empty:
-                with engine.begin() as connection:
-                    for _, row in new_rows.iterrows():
-                        stmt = text("""
-                        MERGE INTO skila_svuit AS target
-                        USING (SELECT :grotwh_day AS grotwh_day, :mivne AS mivne, :midgar AS midgar, :farm_name AS farm_name) AS source
-                        ON target.grotwh_day = source.grotwh_day AND target.mivne = source.mivne AND target.midgar = source.midgar AND target.farm_name = source.farm_name
-                        WHEN MATCHED THEN
-                            UPDATE SET avg_mixed = :avg_mixed, avg_mixed_percent = :avg_mixed_percent
-                        WHEN NOT MATCHED THEN
-                            INSERT (grotwh_day, mivne, midgar, farm_name, avg_mixed, avg_mixed_percent)
-                            VALUES (:grotwh_day, :mivne, :midgar, :farm_name, :avg_mixed, :avg_mixed_percent);
-                        """)
-                        params = {
-                            'grotwh_day': row['grotwh_day'],
-                            'mivne': row['mivne'],
-                            'midgar': row['midgar'],
-                            'farm_name': row['farm_name'],
-                            'avg_mixed': row['avg_mixed'],
-                            'avg_mixed_percent': row['avg_mixed_percent']
-                        }
-                        connection.execute(stmt, params)  # Use params dictionary
-                print(f"Upserted rows successfully for {farm}.")
-            else:
-                print(f"No new rows to upsert for {farm}.")
+                # Upsert logic: Insert new rows and update existing ones
+                if not new_rows.empty:
+                    with engine.begin() as connection:
+                        for _, row in new_rows.iterrows():
+                            stmt = text("""
+                            MERGE INTO skila_svuit AS target
+                            USING (SELECT :grotwh_day AS grotwh_day, :mivne AS mivne, :new_flock AS new_flock, :farm_name AS farm_name) AS source
+                            ON target.grotwh_day = source.grotwh_day AND target.mivne = source.mivne AND target.new_flock = source.new_flock AND target.farm_name = source.farm_name
+                            WHEN MATCHED THEN
+                                UPDATE SET avg_mixed = :avg_mixed, avg_mixed_percent = :avg_mixed_percent
+                            WHEN NOT MATCHED THEN
+                                INSERT (grotwh_day, mivne, new_flock, farm_name, avg_mixed, avg_mixed_percent)
+                                VALUES (:grotwh_day, :mivne, :new_flock, :farm_name, :avg_mixed, :avg_mixed_percent);
+                            """)
+                            params = {
+                                'grotwh_day': row['grotwh_day'],
+                                'mivne': row['mivne'],
+                                'new_flock': row['new_flock'],
+                                'farm_name': row['farm_name'],
+                                'avg_mixed': row['avg_mixed'],
+                                'avg_mixed_percent': row['avg_mixed_percent']
+                            }
+                            connection.execute(stmt, params)  # Use params dictionary
+                    print(f"Upserted rows successfully for {farm}.")
+                else:
+                    print(f"No new rows to upsert for {farm}.")
 
     # Fetch data and write to MongoDB
     df_view = pd.read_sql("SELECT * FROM dbo.skila_svuit_highest_grotwh_day;", con=engine)
@@ -288,7 +291,6 @@ def udate_tmuta():
     for farm in farms_names:
         path = f"{excel_prod}{farms}\\{farm}{excel_middle_name}{excel_file_name_finish}{farm}{excel_end}"
         data = read_excel(path, sheet_name_tmuta)
-
         if not data.empty:
             data = data.replace('', np.nan)
 
@@ -326,30 +328,42 @@ def udate_tmuta():
                 except:
                     print("error "+farm)
 
+                min_date = df_cleaned['date'].min()
+                # Extract the year from the minimum date
+                min_year = min_date.year
+                # Concatenate the year with the values in the 'folk' column
+                df_cleaned['new_flock'] = df_cleaned['flock'].astype(str).apply(lambda x: f"{min_year}{x}")
+                df_cleaned['new_flock'] = pd.to_numeric(df_cleaned['new_flock'])
+                min_folk = df_cleaned['new_flock'].min()
+                farms_new_folk[farm] = min_folk
+
                 # Read existing data from the database
                 # Read existing data from the database
                 print('now '+farm)
-                existing_data = pd.read_sql('SELECT grotwh_day, mivne, midgar, farm_name FROM skila_svuit', con=engine)
+                existing_data = pd.read_sql('SELECT grotwh_day, mivne, new_flock, farm_name FROM skila_svuit', con=engine)
                 existing_data = existing_data.astype(
-                    {'grotwh_day': 'int64', 'mivne': 'int64', 'midgar': 'int64', 'farm_name': 'str'})
-                existing_data.set_index(['grotwh_day', 'mivne', 'midgar', 'farm_name'], inplace=True)
+                    {'grotwh_day': 'int64', 'mivne': 'int64', 'new_flock': 'int64', 'farm_name': 'str'})
+                existing_data.set_index(['grotwh_day', 'mivne', 'new_flock', 'farm_name'], inplace=True)
 
                 # Ensure df_cleaned has required columns for further processing
                 required_columns_df = ['growth day', 'site', 'house_number', 'farm_name', 'hatchery', 'line', 'date',
-                                       'mixed_start', 'daily_mortality']
+                                       'mixed_start', 'daily_mortality',
+                                       'new_flock']  # Include new_folk in required fields
+
                 missing_columns_df = [col for col in required_columns_df if col not in df_cleaned.columns]
 
                 if missing_columns_df:
                     print(f"Missing columns in df_cleaned for further processing: {missing_columns_df}")
                 else:
-                    # Create a new DataFrame df based on df_cleaned with required columns
+                    # Creating the DataFrame with specified required columns
                     df = df_cleaned[
                         ['growth day', 'site', 'house_number', 'farm_name', 'hatchery', 'line', 'date', 'mixed_start',
-                         'daily_mortality']]
+                         'daily_mortality', 'new_flock']]
 
-                    # Convert new DataFrame columns to appropriate types
+                    # Convert DataFrame columns to appropriate types
                     df = df.astype(
                         {'growth day': 'int64', 'site': 'int64', 'house_number': 'int64', 'farm_name': 'str'})
+
                     df.set_index(['growth day', 'site', 'house_number', 'farm_name'], inplace=True)
 
                     # Identify new rows
@@ -371,7 +385,8 @@ def udate_tmuta():
                                                           :line AS line, 
                                                           :date AS date, 
                                                           :mixed_start_quantity AS mixed_start_quantity, 
-                                                          :daily_mortality AS daily_mortality) AS source
+                                                          :daily_mortality AS daily_mortality, 
+                                                          :new_flock AS new_flock) AS source
                                             ON target.growth_day = source.growth_day 
                                                AND target.site = source.site 
                                                AND target.house_number = source.house_number 
@@ -382,10 +397,11 @@ def udate_tmuta():
                                                AND target.date = source.date
                                             WHEN MATCHED THEN
                                                 UPDATE SET target.mixed_start_quantity = source.mixed_start_quantity, 
-                                                           target.daily_mortality = source.daily_mortality
+                                                           target.daily_mortality = source.daily_mortality,
+                                                           target.new_flock = source.new_flock  -- Update the new_folk value
                                             WHEN NOT MATCHED BY TARGET THEN
-                                                INSERT (growth_day, site, house_number, parent_flock, farm_name, hatchery, line, date, mixed_start_quantity, daily_mortality)
-                                                VALUES (:growth_day, :site, :house_number, :parent_flock, :farm_name, :hatchery, :line, :date, :mixed_start_quantity, :daily_mortality);
+                                                INSERT (growth_day, site, house_number, parent_flock, farm_name, hatchery, line, date, mixed_start_quantity, daily_mortality, new_flock)
+                                                VALUES (:growth_day, :site, :house_number, :parent_flock, :farm_name, :hatchery, :line, :date, :mixed_start_quantity, :daily_mortality, :new_flock);
                                         """)
 
                                     params = {
@@ -398,24 +414,19 @@ def udate_tmuta():
                                         'line': row['line'],
                                         'date': row['date'],
                                         'mixed_start_quantity': row['mixed_start'],
-                                        'daily_mortality': row['daily_mortality']
+                                        'daily_mortality': row['daily_mortality'],
+                                        'new_flock': row['new_flock']  # Pass new_folk for upsert
                                     }
 
                                     connection.execute(stmt, params)
-                                    print("success"+farm)
+                                    print("Success for farm: " + row['farm_name'])
                                 except Exception as e:
                                     print(f"An error occurred: {e}")
                         print("Upserted rows successfully.")
                     else:
                         print("No new rows to upsert.")
-
                         # Fetch data and write to MongoDB
-                    df_view = pd.read_sql("SELECT * FROM dbo.skila_svuit_highest_grotwh_day;", con=engine)
-                    df_view2 = pd.read_sql("SELECT [שם חווה],[כמות התחלתית],[תמותה כוללת],[יום גידול],[אחוז תמותה כולל],[יום עדכון אחרון] FROM tmuta14 ORDER BY [data_taken_date] desc;", con=engine)
-                    df_view3 = pd.read_sql("SELECT * FROM dbo.skila_svuit_highest_grotwh_day;", con=engine)
-                    # Assuming write_to_mongo_and_delete is a defined function
-                    write_to_mongo_and_delete(df_view, 'lulim_new', 'tmuta')
-                    write_to_mongo_and_delete(df_view2, 'lulim_new', 'tmuta14')
+
 
 
 def insert_data_to_sql(df, table_name):
@@ -426,18 +437,20 @@ def insert_data_to_sql(df, table_name):
                 USING (SELECT :marketing_date AS marketing_date, :house AS house, :receipt AS receipt,
                               :destination AS destination, :marketed_quantity AS marketed_quantity,
                               :averrage_weight AS averrage_weight, :marketed_age AS marketed_age,
-                              :farm_name AS farm_name) AS source
+                              :farm_name AS farm_name, :new_flock AS new_flock) AS source
                 ON target.marketing_date = source.marketing_date AND target.house = source.house
                    AND target.receipt = source.receipt AND target.destination = source.destination
                    AND target.marketed_quantity = source.marketed_quantity AND target.averrage_weight = source.averrage_weight
                    AND target.marketed_age = source.marketed_age AND target.farm_name = source.farm_name
                 WHEN MATCHED THEN
                     UPDATE SET marketed_quantity = :marketed_quantity, averrage_weight = :averrage_weight,
-                               marketed_age = :marketed_age, farm_name = :farm_name
+                               marketed_age = :marketed_age, farm_name = :farm_name, new_flock = :new_flock
                 WHEN NOT MATCHED THEN
-                    INSERT (marketing_date, house, receipt, destination, marketed_quantity, averrage_weight, marketed_age, farm_name)
-                    VALUES (:marketing_date, :house, :receipt, :destination, :marketed_quantity, :averrage_weight, :marketed_age, :farm_name);
+                    INSERT (marketing_date, house, receipt, destination, marketed_quantity, averrage_weight, marketed_age, farm_name, new_flock)
+                    VALUES (:marketing_date, :house, :receipt, :destination, :marketed_quantity, :averrage_weight, :marketed_age, :farm_name, :new_flock);
             """)
+
+            # Prepare parameters for the SQL command
             params = {
                 'marketing_date': row['marketing date'],
                 'house': row['house'],
@@ -446,9 +459,11 @@ def insert_data_to_sql(df, table_name):
                 'marketed_quantity': row['marketed quantity'],
                 'averrage_weight': row['averrage weight '],
                 'marketed_age': row['marketed age'],
-                'farm_name': row['farm name']
+                'farm_name': row['farm name'],
+                'new_flock': row['new_flock']  # Add new_flock parameter
             }
             connection.execute(stmt, params)
+
 def update_sivuk():
     farms_names = subfolder_names(excel_prod + farms)
     sivuk_results = pd.DataFrame()
@@ -466,13 +481,17 @@ def update_sivuk():
             data = data.reset_index(drop=True)
             data['neto weight '] = pd.to_numeric(data['neto weight '], errors='coerce')
             data = data[data['neto weight '] > 0]
-            sivuk_results = pd.concat([sivuk_results, data], ignore_index=True)
+            if not data.empty:
+                new_flock = 'new_flock'  # Define the new flock column name
+                data[new_flock] = farms_new_folk[farm]
+                sivuk_results = pd.concat([sivuk_results, data], ignore_index=True)
 
     # Convert the 'marketing date' column to a datetime format
     sivuk_results['marketing date'] = pd.to_datetime(sivuk_results['marketing date'], format='%d.%m.%y')
 
     # Format the datetime objects without leading zeros
     sivuk_results['marketing date'] = sivuk_results['marketing date'].dt.strftime('%Y.%m.%d')
+
     insert_data_to_sql(sivuk_results, 'sivuk')
 
 
@@ -678,14 +697,26 @@ def update_results():
     write_to_mongo_and_delete(agg_sivuk_small, 'lulim_new', 'sivuk_end')
 
 
+def update_views():
+    df_view = pd.read_sql("SELECT * FROM dbo.skila_svuit_highest_grotwh_day;", con=engine)
+    df_view2 = pd.read_sql(
+        "SELECT [שם חווה],[כמות התחלתית],[תמותה כוללת],[יום גידול],[אחוז תמותה כולל],[יום עדכון אחרון] FROM tmuta14 ORDER BY [data_taken_date] desc;",
+        con=engine)
+    df_view3 = pd.read_sql("SELECT * FROM dbo.skila_svuit_highest_grotwh_day;", con=engine)
+    # Assuming write_to_mongo_and_delete is a defined function
+    write_to_mongo_and_delete(df_view, 'lulim_new', 'tmuta')
+    write_to_mongo_and_delete(df_view2, 'lulim_new', 'tmuta14')
+
 # function that calculates diff between 2 dates
 
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    udate_skila()
     udate_tmuta()
     update_sivuk()
+    udate_skila()
+    update_views()
+    #update_sivuk()
     #update_data()
     #update_results()
 
