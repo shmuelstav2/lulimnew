@@ -469,6 +469,7 @@ def update_sivuk():
     sivuk_results = pd.DataFrame()
     for farm in farms_names:
         # check if excel file has changed
+        print('sivuk '+farm)
         path = excel_prod + farms + '\\' + farm + excel_middle_name + excel_file_name_finish + farm + excel_end
         data = read_excel(path, sheet_name_sivuk)
         if not data.empty:
@@ -486,13 +487,13 @@ def update_sivuk():
                 data[new_flock] = farms_new_folk[farm]
                 sivuk_results = pd.concat([sivuk_results, data], ignore_index=True)
 
-    # Convert the 'marketing date' column to a datetime format
-    sivuk_results['marketing date'] = pd.to_datetime(sivuk_results['marketing date'], format='%d.%m.%y')
+                # Convert the 'marketing date' column to a datetime format
+                sivuk_results['marketing date'] = pd.to_datetime(sivuk_results['marketing date'], format='%d.%m.%y')
 
-    # Format the datetime objects without leading zeros
-    sivuk_results['marketing date'] = sivuk_results['marketing date'].dt.strftime('%Y.%m.%d')
+                # Format the datetime objects without leading zeros
+                sivuk_results['marketing date'] = sivuk_results['marketing date'].dt.strftime('%Y.%m.%d')
 
-    insert_data_to_sql(sivuk_results, 'sivuk')
+                insert_data_to_sql(sivuk_results, 'sivuk')
 
 
 
