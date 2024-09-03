@@ -9,6 +9,9 @@ import pandas as pd
 from datetime import datetime, timedelta, date
 from sqlalchemy import create_engine
 import urllib
+import argparse
+import schedule
+import time
 import pandas as pd
 import os
 import pandas as pd
@@ -710,15 +713,43 @@ def update_views():
 
 # function that calculates diff between 2 dates
 
+def job():
 
-# Press the green button in the gutter to run the script.
+    try:
+        udate_tmuta()
+        update_sivuk()
+        udate_skila()
+        update_views()
+    except ValueError as e:
+        print('suvuk bug')
+
+
 if __name__ == '__main__':
-    udate_tmuta()
-    update_sivuk()
-    udate_skila()
-    update_views()
+   # udate_tmuta()
+   # update_sivuk()
+   # udate_skila()
+   # update_views()
     #update_sivuk()
     #update_data()
     #update_results()
+    parser = argparse.ArgumentParser(description="Script to run a job based on environment and command-line arguments")
+    parser.add_argument("--param1", type=int, help="Param1")
+    args = parser.parse_args()
 
+
+    param1 = args.param1
+    print('rcr4d4'+str(param1))
+
+    if (environment == 'dev' or param1 == 0):
+        print('now')
+        job()
+
+    else:
+        if environment == 'prod':
+        # Schedule the job to run every 5 minutes
+         schedule.every(360).minutes.do(job)
+
+        while True:
+          schedule.run_pending()
+          time.sleep(1)
 # See PyCharm help at https://www.jetbrains.com/help/pycharm/
