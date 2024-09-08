@@ -73,6 +73,7 @@ reports = '\\current active flocks\\'
 sheet_name_tmuta = 'tmuta'
 sheet_name_sivuk = 'shivuk'
 sheet_name_skila = 'סיכום שקילות'
+sheet_name_tarovet ='תערובת'
 excel_file_name_finish = 'current flock '
 excel_end = '.xlsx'''
 excel_middle_name = '\\current flock\\'
@@ -127,6 +128,38 @@ def subfolder_names(path):
     return folder_names
 
 
+def translate(farm):
+    translations = {
+        'gotliv 4': 'גוטליב 4',
+        'gotliv 2': 'גוטליב 2',
+        'megadim': 'מגדים',
+        'megido': 'מגידו',
+        'ranen': 'רנן',
+        'shaal morad': 'שעל מורד',
+        'kalanit': 'כלנית',
+        'ramat zvi haim': 'רמת צבי חיים',
+        'ramat zvi moshe': 'רמת צבי משה',
+        'ramot naftali': 'רמות נפתלי',
+        'ranen': 'רנן',
+        'shaal moyal': 'שעל מויאל',
+        'musayel': 'מוסייל',
+        'sigler': 'סיגלר',
+        'gazit': 'גזית',
+        'sadmot dvora': 'שדמות דבורה',
+        'mawiya': 'מעוואיה',
+        'sharona': 'שרונה'
+        # Add more translations as needed
+    }
+
+    # Check if farm exists in translations dictionary
+    if farm in translations:
+        return translations[farm]
+    else:
+        print(f"Translation not found for '{farm}'")
+        return f"Translation not found for '{farm}'"
+
+
+
 def print_hi(name):
     # Use a breakpoint in the code line below to debug your script.
     print(f'Hi, {name}')  # Press Ctrl+F8 to toggle the breakpoint.
@@ -176,36 +209,6 @@ def write_to_mongo_and_delete (df,db_name,collection_name):
     # Close the MongoDB connection
     client.close()
 
-
-def translate(farm):
-    translations = {
-        'gotliv 4': 'גוטליב 4',
-        'gotliv 2': 'גוטליב 2',
-        'megadim': 'מגדים',
-        'megido': 'מגידו',
-        'ranen': 'רנן',
-        'shaal morad': 'שעל מורד',
-        'kalanit': 'כלנית',
-        'ramat zvi haim': 'רמת צבי חיים',
-        'ramat zvi moshe': 'רמת צבי משה',
-        'ramot naftali': 'רמות נפתלי',
-        'ranen': 'רנן',
-        'shaal moyal': 'שעל מויאל',
-        'musayel': 'מוסייל',
-        'sigler': 'סיגלר',
-        'gazit': 'גזית',
-        'sadmot dvora': 'שדמות דבורה',
-        'mawiya': 'מעוואיה',
-        'sharona': 'שרונה'
-        # Add more translations as needed
-    }
-
-    # Check if farm exists in translations dictionary
-    if farm in translations:
-        return translations[farm]
-    else:
-        print(f"Translation not found for '{farm}'")
-        return f"Translation not found for '{farm}'"
 
 
 def udate_skila():
@@ -291,10 +294,14 @@ def udate_skila():
 def udate_tmuta():
     #run over all the farm files
     farms_names = subfolder_names(excel_prod + farms)
-    for farm in farms_names:
+    count = 1
+    for farm in farms_names :
+
         path = f"{excel_prod}{farms}\\{farm}{excel_middle_name}{excel_file_name_finish}{farm}{excel_end}"
         data = read_excel(path, sheet_name_tmuta)
         if not data.empty:
+        #and  count == 1:
+            count = 2
             data = data.replace('', np.nan)
 
             # Drop rows and columns where all elements are NaN
@@ -490,16 +497,62 @@ def update_sivuk():
                 data[new_flock] = farms_new_folk[farm]
                 sivuk_results = pd.concat([sivuk_results, data], ignore_index=True)
 
-                # Convert the 'marketing date' column to a datetime format
-                sivuk_results['marketing date'] = pd.to_datetime(sivuk_results['marketing date'], format='%d.%m.%y')
+                # Convert the 'marketing date' column to datetime, allowing for mixed formats
+                sivuk_results['marketing date'] = pd.to_datetime(sivuk_results['marketing date'], errors='coerce')
 
-                # Format the datetime objects without leading zeros
+                # Format the datetime objects to the desired format (YYYY.MM.DD)
                 sivuk_results['marketing date'] = sivuk_results['marketing date'].dt.strftime('%Y.%m.%d')
 
                 insert_data_to_sql(sivuk_results, 'sivuk')
 
 
 
+def update_tarovet():
+    farms_names = subfolder_names(excel_prod + farms)
+    tmuta_results = pd.DataFrame()
+    for farm in farms_names:
+        # check if excel file has changed
+        path = excel_prod + farms + '\\' + farm + excel_middle_name + excel_file_name_finish + farm + excel_end
+        data = read_excel(path, sheet_name_tarovet)
+        if not data.empty:
+
+            threshold = 5
+            # Delete columns with fewer non-null values than the threshold
+            data = data.iloc[2:]
+            data = data.dropna(axis=1, thresh=threshold)
+            data.columns = data.iloc[0]
+            data = data.dropna(axis=0, thresh=threshold)
+
+            data['תאריך'] = pd.to_datetime(data['תאריך'], errors='coerce')
+            data1 = data[data['תאריך'].notna()]
+
+            date_column = data1[['תאריך']]
+
+            # Identify columns that are numeric by their names
+            numeric_columns = [col for col in data1.columns if
+                               col != 'תאריך' and pd.to_numeric(data1[col], errors='coerce').notna().all()]
+            non_numeric_columns = [col for col in data1.columns if col != 'תאריך' and col not in numeric_columns]
+
+            # DataFrame with 'תאריך' and numeric columns
+            data1_numeric = pd.concat([date_column, data1[numeric_columns]], axis=1)
+
+            # DataFrame with 'תאריך' and non-numeric columns
+            data1_non_numeric = pd.concat([date_column, data1[non_numeric_columns]], axis=1)
+
+            print("Numeric DataFrame:")
+            print(data1_numeric.head())
+
+            print("\nNon-numeric DataFrame:")
+            print(data1_non_numeric.head())
+            df_melted = pd.melt(data1_non_numeric, id_vars=['תאריך'], var_name='mivne', value_name='value')
+            farm_name = translate(farm)
+            new_flock = 'new_flock'  # Define the new flock column name
+            df_melted[new_flock] = farms_new_folk[farm]
+            df_melted['farm_name'] = farm_name
+            data1_numeric['farm_name'] = farm_name
+            data1_numeric[new_flock] = farms_new_folk[farm]
+
+            print('wedwdew')
 
 
 
@@ -717,11 +770,12 @@ def job():
 
     try:
         udate_tmuta()
+        #update_tarovet()
         update_sivuk()
         udate_skila()
         update_views()
     except ValueError as e:
-        print('suvuk bug')
+        print('bug: '+e)
 
 
 if __name__ == '__main__':
