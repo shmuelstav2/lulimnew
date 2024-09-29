@@ -135,18 +135,18 @@ def translate(farm):
         'megadim': 'מגדים',
         'megido': 'מגידו',
         'ranen': 'רנן',
-        'shaal morad': 'שעל מורד',
+        'shaal morad': 'שעל - מורד',
         'kalanit': 'כלנית',
         'ramat zvi haim': 'רמת צבי חיים',
         'ramat zvi moshe': 'רמת צבי משה',
         'ramot naftali': 'רמות נפתלי',
         'ranen': 'רנן',
-        'shaal moyal': 'שעל מויאל',
+        'shaal moyal': 'שעל - מויאל',
         'musayel': 'מוסייל',
         'sigler': 'סיגלר',
         'gazit': 'גזית',
         'sadmot dvora': 'שדמות דבורה',
-        'mawiya': 'מעוואיה',
+        'mawiya': 'מעאוויה',
         'sharona': 'שרונה'
         # Add more translations as needed
     }
@@ -216,6 +216,7 @@ def udate_skila():
     tmuta_results = pd.DataFrame()
     for farm in farms_names:
         path = f"{excel_prod}{farms}\\{farm}{excel_middle_name}{excel_file_name_finish}{farm}{excel_end}"
+        #path = 'C:\\Users\\User\\Dropbox\\BMC\\prod\\fandy farms\\shaal moyal\\current flock\\current flock shaal moyal.xlsx'
         data = read_excel(path, sheet_name_skila)
 
         if not data.empty:
@@ -778,32 +779,34 @@ def job():
         print('bug: '+e)
 
 
-if __name__ == '__main__':
-   # udate_tmuta()
-   # update_sivuk()
-   # udate_skila()
-   # update_views()
-    #update_sivuk()
-    #update_data()
-    #update_results()
-    parser = argparse.ArgumentParser(description="Script to run a job based on environment and command-line arguments")
-    parser.add_argument("--param1", type=int, help="Param1")
-    args = parser.parse_args()
+def run_program():
+    try:
+        parser = argparse.ArgumentParser(description="Script to run a job based on environment and command-line arguments")
+        parser.add_argument("--param1", type=int, help="Param1")
+        args = parser.parse_args()
 
+        param1 = args.param1
+        print('rcr4d4'+str(param1))
 
-    param1 = args.param1
-    print('rcr4d4'+str(param1))
+        environment = 'dev'  # You need to set the 'environment' variable somewhere
 
-    if (environment == 'dev' or param1 == 0):
-        print('now')
-        job()
+        if environment == 'dev' or param1 == 0:
+            print('now')
+            job()
 
-    else:
-        if environment == 'prod':
-        # Schedule the job to run every 5 minutes
-         schedule.every(360).minutes.do(job)
+        else:
+            if environment == 'prod':
+                # Schedule the job to run every 360 minutes (6 hours)
+                schedule.every(360).minutes.do(job)
 
-        while True:
-          schedule.run_pending()
-          time.sleep(1)
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+            while True:
+                schedule.run_pending()
+                time.sleep(1)
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        print("Restarting the program...")
+        run_program()
+
+if __name__ == "__main__":
+    run_program()
