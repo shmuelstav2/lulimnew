@@ -292,8 +292,25 @@ def udate_skila():
     write_to_mongo_and_delete(df_view, 'lulim_new', 'skila')
     print('בכרבר')
 
+
+
+def truncate_flock():
+    with engine.begin() as connection:
+        # Truncate the table once before inserting the rows
+        stmt = text("TRUNCATE TABLE [dbo].[open_farms]")
+        connection.execute(stmt)
+
+def add_flock(farm):
+    with engine.begin() as connection:
+        stmt = text("""
+                           INSERT INTO [dbo].[open_farms] (farm_name) 
+                          VALUES (:farm_name)
+                       """)
+        connection.execute(stmt, {'farm_name': farm})
+
 def udate_tmuta():
     #run over all the farm files
+    truncate_flock()
     farms_names = subfolder_names(excel_prod + farms)
     count = 1
     for farm in farms_names :
@@ -317,6 +334,7 @@ def udate_tmuta():
                 df_cleaned = df_cleaned.reset_index(drop=True)
                 df_cleaned = df_cleaned[df_cleaned['mixed daily mortality'] > 0]
 
+
             if not df_cleaned.empty:
                 # Create new DataFrame for SQL
                 df = pd.DataFrame()
@@ -325,7 +343,9 @@ def udate_tmuta():
                 df_cleaned['site'] = pd.to_numeric(df_cleaned['site'])
                 df_cleaned['site'] = pd.to_numeric(df_cleaned['site'])
                 df_cleaned['house_number'] = pd.to_numeric(df_cleaned['house number'])
-                df_cleaned['parent_flock'] = pd.to_numeric(df_cleaned['perent flock'])
+                df_cleaned['perent flock'] = df_cleaned['perent flock'].astype(str)
+                df_cleaned['parent_flock'] = df_cleaned['perent flock'].str.extract('(\d+)')
+                df_cleaned['parent_flock'] = pd.to_numeric(df_cleaned['parent_flock'])
                 df_cleaned['mixed_start'] = pd.to_numeric(df_cleaned['mixed start quantity'])
                 df_cleaned['daily_mortality'] = pd.to_numeric(df_cleaned['daily mortality'])
                 df_cleaned['growth day'] = pd.to_numeric(df_cleaned['growth day'])
@@ -351,10 +371,11 @@ def udate_tmuta():
                 # Read existing data from the database
                 # Read existing data from the database
                 print('now '+farm)
-                existing_data = pd.read_sql('SELECT grotwh_day, mivne, new_flock, farm_name FROM skila_svuit', con=engine)
+                existing_data = pd.read_sql('SELECT [growth_day],[house_number], new_flock, farm_name FROM [dbo].[tmuta]', con=engine)
                 existing_data = existing_data.astype(
-                    {'grotwh_day': 'int64', 'mivne': 'int64', 'new_flock': 'int64', 'farm_name': 'str'})
-                existing_data.set_index(['grotwh_day', 'mivne', 'new_flock', 'farm_name'], inplace=True)
+                    {'growth_day': 'int64', 'house_number': 'int64', 'new_flock': 'int64', 'farm_name': 'str'})
+
+                existing_data.set_index(['growth_day', 'house_number', 'new_flock', 'farm_name'], inplace=True)
 
                 # Ensure df_cleaned has required columns for further processing
                 required_columns_df = ['growth day', 'site', 'house_number', 'farm_name', 'hatchery', 'line', 'date',
@@ -373,9 +394,9 @@ def udate_tmuta():
 
                     # Convert DataFrame columns to appropriate types
                     df = df.astype(
-                        {'growth day': 'int64', 'site': 'int64', 'house_number': 'int64', 'farm_name': 'str'})
-
-                    df.set_index(['growth day', 'site', 'house_number', 'farm_name'], inplace=True)
+                        {'growth day': 'int64', 'new_flock': 'int64', 'house_number': 'int64', 'farm_name': 'str'})
+                    df.set_index(['growth day', 'house_number', 'new_flock', 'farm_name'], inplace=True)
+                    #df.set_index(['growth day', 'site', 'house_number', 'farm_name'], inplace=True)
 
                     # Identify new rows
                     new_rows = df[~df.index.isin(existing_data.index)].reset_index()
@@ -435,6 +456,7 @@ def udate_tmuta():
                                     print(f"An error occurred: {e}")
                         print("Upserted rows successfully.")
                     else:
+                        add_flock(translate(farm))
                         print("No new rows to upsert.")
                         # Fetch data and write to MongoDB
 
@@ -765,6 +787,10 @@ def update_views():
     write_to_mongo_and_delete(df_view, 'lulim_new', 'tmuta')
     write_to_mongo_and_delete(df_view2, 'lulim_new', 'tmuta14')
 
+
+
+
+
 # function that calculates diff between 2 dates
 
 def job():
@@ -772,9 +798,10 @@ def job():
     try:
         udate_tmuta()
         #update_tarovet()
-        update_sivuk()
-        udate_skila()
-        update_views()
+        #update_sivuk()
+        #udate_skila()
+        #update_views()
+        #update_flock()
     except ValueError as e:
         print('bug: '+e)
 
