@@ -798,9 +798,9 @@ def job():
     try:
         udate_tmuta()
         #update_tarovet()
-        #update_sivuk()
-        #udate_skila()
-        #update_views()
+        update_sivuk()
+        udate_skila()
+        update_views()
         #update_flock()
     except ValueError as e:
         print('bug: '+e)
