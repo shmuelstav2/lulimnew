@@ -815,7 +815,7 @@ def run_program():
         param1 = args.param1
         print('rcr4d4'+str(param1))
 
-        environment = 'dev'  # You need to set the 'environment' variable somewhere
+        #environment = 'dev'  # You need to set the 'environment' variable somewhere
 
         if environment == 'dev' or param1 == 0:
             print('now')
