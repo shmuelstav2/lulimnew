@@ -780,7 +780,7 @@ def update_results():
 def update_views():
     df_view = pd.read_sql("SELECT * FROM dbo.skila_svuit_highest_grotwh_day;", con=engine)
     df_view2 = pd.read_sql(
-        "SELECT [שם חווה],[כמות התחלתית],[תמותה כוללת],[יום גידול],[אחוז תמותה כולל],[יום עדכון אחרון] FROM tmuta14 ORDER BY [data_taken_date] desc;",
+        "SELECT [שם חווה],[כמות התחלתית],[תמותה כוללת],[יום גידול],[אחוז תמותה כולל],[יום עדכון אחרון] FROM tmuta14_open ORDER BY [data_taken_date] desc;",
         con=engine)
     df_view3 = pd.read_sql("SELECT * FROM dbo.skila_svuit_highest_grotwh_day;", con=engine)
     # Assuming write_to_mongo_and_delete is a defined function
@@ -824,7 +824,7 @@ def run_program():
         else:
             if environment == 'prod':
                 # Schedule the job to run every 360 minutes (6 hours)
-                schedule.every(360).minutes.do(job)
+                schedule.every(120).minutes.do(job())
 
             while True:
                 schedule.run_pending()
