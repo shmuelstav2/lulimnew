@@ -16,15 +16,16 @@ import pandas as pd
 import os
 import pandas as pd
 import numpy as np
-#import schedule
+# import schedule
 import pandas as pd
-#import xlsxwriter
+# import xlsxwriter
 import time
 import pandas as pd
 import pymongo
 from pymongo import MongoClient
 from pymongo import MongoClient
 from datetime import datetime, timedelta
+
 
 def read_config(filename='config.txt'):
     script_path = os.path.abspath(__file__)
@@ -41,6 +42,7 @@ def read_config(filename='config.txt'):
         print(f"Error reading configuration file: {e}")
 
     return config
+
 
 # Get configuration values
 config = read_config()
@@ -62,7 +64,6 @@ conn_str = (
 params = urllib.parse.quote_plus(conn_str)
 engine = create_engine(f'mssql+pyodbc:///?odbc_connect={params}')
 
-
 # Print or use the values as needed
 print("Excel Prod:", excel_prod)
 print("Excel Test:", excel_test)
@@ -73,18 +74,19 @@ reports = '\\current active flocks\\'
 sheet_name_tmuta = 'tmuta'
 sheet_name_sivuk = 'shivuk'
 sheet_name_skila = 'סיכום שקילות'
-sheet_name_tarovet ='תערובת'
+sheet_name_tarovet = 'תערובת'
 excel_file_name_finish = 'current flock '
 excel_end = '.xlsx'''
 excel_middle_name = '\\current flock\\'
 
 farms_new_folk = {}
-#Functions
-def read_excel(path, sheet_name):
 
+
+# Functions
+def read_excel(path, sheet_name):
     try:
-        #df = pd.read_excel(path, sheet_name=sheet_name)
-        #return df
+        # df = pd.read_excel(path, sheet_name=sheet_name)
+        # return df
         workbook = openpyxl.load_workbook(path, read_only=True, data_only=True)
 
         # Check if the specified sheet exists
@@ -111,6 +113,7 @@ def read_excel(path, sheet_name):
         # Handle any exceptions (e.g., file not found, sheet not found) and return an empty DataFrame
         print(f"An error occurred: {str(e)}")
         return pd.DataFrame()
+
 
 def subfolder_names(path):
     folder_names = []
@@ -159,24 +162,26 @@ def translate(farm):
         return f"Translation not found for '{farm}'"
 
 
-
 def print_hi(name):
     # Use a breakpoint in the code line below to debug your script.
     print(f'Hi, {name}')  # Press Ctrl+F8 to toggle the breakpoint.
 
-def find_hathala(farm, day,df):
+
+def find_hathala(farm, day, df):
     df = df[df['farm name'] == farm]
     df = df.groupby('house number').agg({'mixed start quantity': 'max'}).reset_index()
     column_sum = df['mixed start quantity'].sum()
     return column_sum
 
 
-def find_tmuta_iomit(farm, day,df):
+def find_tmuta_iomit(farm, day, df):
     df = df[df['farm name'] == farm]
     df = df[df['growth day'] == day]
     column_sum = df['mixed daily mortality'].sum()
     return column_sum
-def write_to_mongo_and_delete (df,db_name,collection_name):
+
+
+def write_to_mongo_and_delete(df, db_name, collection_name):
     # MongoDB connection settings
     mongo_uri = "mongodb://localhost:27017/"
     database_name = db_name
@@ -210,13 +215,12 @@ def write_to_mongo_and_delete (df,db_name,collection_name):
     client.close()
 
 
-
 def udate_skila():
     farms_names = subfolder_names(excel_prod + farms)
     tmuta_results = pd.DataFrame()
     for farm in farms_names:
         path = f"{excel_prod}{farms}\\{farm}{excel_middle_name}{excel_file_name_finish}{farm}{excel_end}"
-        #path = 'C:\\Users\\User\\Dropbox\\BMC\\prod\\fandy farms\\shaal moyal\\current flock\\current flock shaal moyal.xlsx'
+        # path = 'C:\\Users\\User\\Dropbox\\BMC\\prod\\fandy farms\\shaal moyal\\current flock\\current flock shaal moyal.xlsx'
         data = read_excel(path, sheet_name_skila)
 
         if not data.empty:
@@ -242,14 +246,15 @@ def udate_skila():
             if not df.empty:
                 new_flock = 'new_flock'  # Define the new flock column name
                 df[new_flock] = farms_new_folk[farm]
-                #df['midgar'] = 1
+                # df['midgar'] = 1
                 df['farm_name'] = str(translate(farm))
                 df['avg_mixed'] = df['avg_mixed'].round(3)
                 df['avg_mixed_percent'] = df['avg_mixed_percent'].round(3)
                 df = df[~((df['avg_mixed'] == 0) & (df['avg_mixed_percent'] == 0))]
-    
+
                 # Load existing data and normalize
-                existing_data = pd.read_sql('SELECT grotwh_day, mivne, new_flock, farm_name FROM skila_svuit', con=engine)
+                existing_data = pd.read_sql('SELECT grotwh_day, mivne, new_flock, farm_name FROM skila_svuit',
+                                            con=engine)
                 existing_data = existing_data.astype(
                     {'grotwh_day': 'int64', 'mivne': 'int64', 'new_flock': 'int64', 'farm_name': 'str'})
                 existing_data.set_index(['grotwh_day', 'mivne', 'new_flock', 'farm_name'], inplace=True)
@@ -284,14 +289,14 @@ def udate_skila():
                             }
                             connection.execute(stmt, params)  # Use params dictionary
                     print(f"Upserted rows successfully for {farm}.")
+
                 else:
                     print(f"No new rows to upsert for {farm}.")
 
     # Fetch data and write to MongoDB
-    df_view = pd.read_sql("SELECT * FROM dbo.skila_svuit_highest_grotwh_day;", con=engine)
+    df_view = pd.read_sql("SELECT * FROM dbo.skila_svuit_highest_grotwh_day OPTION (RECOMPILE);", con=engine)
     write_to_mongo_and_delete(df_view, 'lulim_new', 'skila')
     print('בכרבר')
-
 
 
 def truncate_flock():
@@ -299,6 +304,7 @@ def truncate_flock():
         # Truncate the table once before inserting the rows
         stmt = text("TRUNCATE TABLE [dbo].[open_farms]")
         connection.execute(stmt)
+
 
 def add_flock(farm):
     with engine.begin() as connection:
@@ -308,17 +314,20 @@ def add_flock(farm):
                        """)
         connection.execute(stmt, {'farm_name': farm})
 
+
 def udate_tmuta():
-    #run over all the farm files
+    # run over all the farm files
+
     truncate_flock()
+
     farms_names = subfolder_names(excel_prod + farms)
     count = 1
-    for farm in farms_names :
+    for farm in farms_names:
 
         path = f"{excel_prod}{farms}\\{farm}{excel_middle_name}{excel_file_name_finish}{farm}{excel_end}"
         data = read_excel(path, sheet_name_tmuta)
         if not data.empty:
-        #and  count == 1:
+            # and  count == 1:
             count = 2
             data = data.replace('', np.nan)
 
@@ -333,7 +342,6 @@ def udate_tmuta():
                 df_cleaned = df_cleaned.iloc[1:]
                 df_cleaned = df_cleaned.reset_index(drop=True)
                 df_cleaned = df_cleaned[df_cleaned['mixed daily mortality'] > 0]
-
 
             if not df_cleaned.empty:
                 # Create new DataFrame for SQL
@@ -350,14 +358,15 @@ def udate_tmuta():
                 df_cleaned['daily_mortality'] = pd.to_numeric(df_cleaned['daily mortality'])
                 df_cleaned['growth day'] = pd.to_numeric(df_cleaned['growth day'])
                 # Convert columns to string
-                df_cleaned['farm_name'] = df_cleaned['farm name'].astype(str)
+                df_cleaned['farm_name'] = translate(farm)
+                df_cleaned = df_cleaned.drop('farm name', axis=1)
                 df_cleaned['hatchery'] = df_cleaned['hatchery'].astype(str)
                 df_cleaned['line'] = df_cleaned['line'].astype(str)
 
-                try: # Convert 'date' to datetime
+                try:  # Convert 'date' to datetime
                     df_cleaned['date'] = pd.to_datetime(df_cleaned['date'])
                 except:
-                    print("error "+farm)
+                    print("error " + farm)
 
                 min_date = df_cleaned['date'].min()
                 # Extract the year from the minimum date
@@ -370,15 +379,16 @@ def udate_tmuta():
 
                 # Read existing data from the database
                 # Read existing data from the database
-                print('now '+farm)
-                existing_data = pd.read_sql('SELECT [growth_day],[house_number], new_flock, farm_name FROM [dbo].[tmuta]', con=engine)
+                print('now ' + farm)
+                existing_data = pd.read_sql(
+                    'SELECT [growth_day],[house_number], new_flock, farm_name FROM [dbo].[tmuta]', con=engine)
                 existing_data = existing_data.astype(
                     {'growth_day': 'int64', 'house_number': 'int64', 'new_flock': 'int64', 'farm_name': 'str'})
 
                 existing_data.set_index(['growth_day', 'house_number', 'new_flock', 'farm_name'], inplace=True)
 
                 # Ensure df_cleaned has required columns for further processing
-                required_columns_df = ['growth day', 'site', 'house_number', 'farm_name', 'hatchery', 'line', 'date',
+                required_columns_df = ['growth day', 'site', 'parent_flock','house_number', 'farm_name', 'hatchery', 'line', 'date',
                                        'mixed_start', 'daily_mortality',
                                        'new_flock']  # Include new_folk in required fields
 
@@ -389,14 +399,14 @@ def udate_tmuta():
                 else:
                     # Creating the DataFrame with specified required columns
                     df = df_cleaned[
-                        ['growth day', 'site', 'house_number', 'farm_name', 'hatchery', 'line', 'date', 'mixed_start',
+                        ['growth day', 'site', 'house_number', 'parent_flock','farm_name', 'hatchery', 'line', 'date', 'mixed_start',
                          'daily_mortality', 'new_flock']]
 
                     # Convert DataFrame columns to appropriate types
                     df = df.astype(
-                        {'growth day': 'int64', 'new_flock': 'int64', 'house_number': 'int64', 'farm_name': 'str'})
+                        {'growth day': 'int64', 'new_flock': 'int64', 'parent_flock': 'int64','house_number': 'int64', 'farm_name': 'str'})
                     df.set_index(['growth day', 'house_number', 'new_flock', 'farm_name'], inplace=True)
-                    #df.set_index(['growth day', 'site', 'house_number', 'farm_name'], inplace=True)
+                    # df.set_index(['growth day', 'site', 'house_number', 'farm_name'], inplace=True)
 
                     # Identify new rows
                     new_rows = df[~df.index.isin(existing_data.index)].reset_index()
@@ -440,7 +450,7 @@ def udate_tmuta():
                                         'growth_day': row['growth day'],
                                         'site': row['site'],
                                         'house_number': row['house_number'],
-                                        'parent_flock': 0,
+                                        'parent_flock':  row['parent_flock'],
                                         'farm_name': row['farm_name'],
                                         'hatchery': row['hatchery'],
                                         'line': row['line'],
@@ -459,7 +469,6 @@ def udate_tmuta():
                         add_flock(translate(farm))
                         print("No new rows to upsert.")
                         # Fetch data and write to MongoDB
-
 
 
 def insert_data_to_sql(df, table_name):
@@ -497,12 +506,13 @@ def insert_data_to_sql(df, table_name):
             }
             connection.execute(stmt, params)
 
+
 def update_sivuk():
     farms_names = subfolder_names(excel_prod + farms)
     sivuk_results = pd.DataFrame()
     for farm in farms_names:
         # check if excel file has changed
-        print('sivuk '+farm)
+        print('sivuk ' + farm)
         path = excel_prod + farms + '\\' + farm + excel_middle_name + excel_file_name_finish + farm + excel_end
         data = read_excel(path, sheet_name_sivuk)
         if not data.empty:
@@ -529,7 +539,6 @@ def update_sivuk():
                 insert_data_to_sql(sivuk_results, 'sivuk')
 
 
-
 def update_tarovet():
     farms_names = subfolder_names(excel_prod + farms)
     tmuta_results = pd.DataFrame()
@@ -538,7 +547,6 @@ def update_tarovet():
         path = excel_prod + farms + '\\' + farm + excel_middle_name + excel_file_name_finish + farm + excel_end
         data = read_excel(path, sheet_name_tarovet)
         if not data.empty:
-
             threshold = 5
             # Delete columns with fewer non-null values than the threshold
             data = data.iloc[2:]
@@ -578,10 +586,7 @@ def update_tarovet():
             print('wedwdew')
 
 
-
-
 def update_data():
-
     farms_names = subfolder_names(excel_prod + farms)
     tmuta_results = pd.DataFrame()
     for farm in farms_names:
@@ -646,7 +651,6 @@ def update_data():
 
 
 def update_results():
-
     # Connect to MongoDB
     client = MongoClient('mongodb://localhost:27017/')
     db = client['lulim_new']  # Replace 'your_database' with your actual database name
@@ -656,10 +660,10 @@ def update_results():
     cursor = collection.find()
 
     df = pd.DataFrame(list(cursor))
-    #df['date'] = pd.to_datetime(df['date'])
+    # df['date'] = pd.to_datetime(df['date'])
 
     # Check for missing values
-    #print(df.isnull().sum())
+    # print(df.isnull().sum())
 
     # If there are missing values, handle or remove them as needed
 
@@ -667,7 +671,6 @@ def update_results():
 
     df = df[df['date'] != '#VALUE!']
     # Display the rows with invalid dates
-
 
     latest_dates = df.groupby('farm name')['date'].max().reset_index()
     # Group by farm name and find the latest date for each farm
@@ -677,16 +680,17 @@ def update_results():
 
     filtered_df_date = df.groupby('farm name')['growth day'].max().reset_index()
 
-    filtered_df_date =pd.merge(filtered_df_date, latest_dates[['farm name','date']], on=['farm name'])
+    filtered_df_date = pd.merge(filtered_df_date, latest_dates[['farm name', 'date']], on=['farm name'])
 
-    filtered_df_date ['begin_date'] = pd.to_datetime(filtered_df['date']) - pd.to_timedelta(filtered_df['growth day'],unit='d')
+    filtered_df_date['begin_date'] = pd.to_datetime(filtered_df['date']) - pd.to_timedelta(filtered_df['growth day'],
+                                                                                           unit='d')
 
     filtered_df_date.set_index('farm name', inplace=True)
 
     # Convert filtered_df to a dictionary
     filtered_dict = filtered_df_date.to_dict(orient='index')
 
-    #df['begin_date'] = ''
+    # df['begin_date'] = ''
     df['begin_date'] = df['farm name'].map(lambda x: filtered_dict.get(x, pd.NaT))
     df['begin_date'] = df['begin_date'].apply(lambda x: x['begin_date'] if isinstance(x, dict) else x)
     df['date'] = pd.to_datetime(df['date'])
@@ -707,7 +711,7 @@ def update_results():
     result_aggregete['notru_lesivuk'] = result_aggregete['hacnasa'] - result_aggregete['mixed daily mortality']
     result_aggregete['tmuta_iomit'] = result_aggregete.apply(
         lambda row: find_tmuta_iomit(row['farm name'], row['growth day'], df), axis=1)
-    write_to_mongo_and_delete(result_aggregete,'lulim_new','tmuta_end')
+    write_to_mongo_and_delete(result_aggregete, 'lulim_new', 'tmuta_end')
 
     client = MongoClient('mongodb://localhost:27017/')
     db = client['lulim_new']  # Replace 'your_database' with your actual database name
@@ -720,9 +724,9 @@ def update_results():
 
     # Group by farm name and find the latest date for each farm
     try:
-     invalid_date_rows = df[df['marketing date'] == '#VALUE!']
-     # Display the rows with invalid dates
-     print(invalid_date_rows)
+        invalid_date_rows = df[df['marketing date'] == '#VALUE!']
+        # Display the rows with invalid dates
+        print(invalid_date_rows)
     except KeyError as e:
         print(f"KeyError: {e}")
 
@@ -788,22 +792,18 @@ def update_views():
     write_to_mongo_and_delete(df_view2, 'lulim_new', 'tmuta14')
 
 
-
-
-
 # function that calculates diff between 2 dates
 
 def job():
-
     try:
         udate_tmuta()
         #update_tarovet()
         update_sivuk()
         udate_skila()
-        update_views()
+        #update_views()
         #update_flock()
     except ValueError as e:
-        print('bug: '+e)
+        print('bug: ' + e)
 
 
 def run_program():
@@ -813,7 +813,7 @@ def run_program():
         args = parser.parse_args()
 
         param1 = args.param1
-        print('rcr4d4'+str(param1))
+        print('param 1 input '+str(param1))
 
         #environment = 'dev'  # You need to set the 'environment' variable somewhere
 
@@ -824,7 +824,12 @@ def run_program():
         else:
             if environment == 'prod':
                 # Schedule the job to run every 360 minutes (6 hours)
-                schedule.every(120).minutes.do(job())
+                print('begin prod option')
+                job()
+                print('finish prod option')
+                print('begin prod schedule')
+                schedule.every(120).minutes.do(job)
+                print('finish prod schedule')
 
             while True:
                 schedule.run_pending()
