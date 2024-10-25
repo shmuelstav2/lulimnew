@@ -782,13 +782,13 @@ def update_results():
 
 
 def update_views():
-    df_view = pd.read_sql("SELECT * FROM dbo.skila_svuit_highest_grotwh_day;", con=engine)
+    #df_view = pd.read_sql("SELECT * FROM dbo.skila_svuit_highest_grotwh_day;", con=engine)
     df_view2 = pd.read_sql(
-        "SELECT [שם חווה],[כמות התחלתית],[תמותה כוללת],[יום גידול],[אחוז תמותה כולל],[יום עדכון אחרון] FROM tmuta14_open ORDER BY [data_taken_date] desc;",
+        "SELECT [שם חווה],[כמות התחלתית],[תמותה כוללת],[יום גידול],[אחוז תמותה כולל],[יום עדכון אחרון] FROM tmuta14_new ORDER BY [יום עדכון אחרון] desc;",
         con=engine)
-    df_view3 = pd.read_sql("SELECT * FROM dbo.skila_svuit_highest_grotwh_day;", con=engine)
+    #df_view3 = pd.read_sql("SELECT * FROM dbo.skila_svuit_highest_grotwh_day;", con=engine)
     # Assuming write_to_mongo_and_delete is a defined function
-    write_to_mongo_and_delete(df_view, 'lulim_new', 'tmuta')
+    #write_to_mongo_and_delete(df_view, 'lulim_new', 'tmuta')
     write_to_mongo_and_delete(df_view2, 'lulim_new', 'tmuta14')
 
 
@@ -800,7 +800,7 @@ def job():
         #update_tarovet()
         update_sivuk()
         udate_skila()
-        #update_views()
+        update_views()
         #update_flock()
     except ValueError as e:
         print('bug: ' + e)
