@@ -294,7 +294,12 @@ def udate_skila():
                     print(f"No new rows to upsert for {farm}.")
 
     # Fetch data and write to MongoDB
-    df_view = pd.read_sql("SELECT * FROM dbo.skila_svuit_highest_grotwh_day OPTION (RECOMPILE);", con=engine)
+    df_view = pd.read_sql("""
+        SELECT [farm_name], [mivne], [grotwh_day], [avg_mixed], [avg_mixed_percent], [parent_flock]
+        FROM dbo.skila_svuit_highest_grotwh_day OPTION (RECOMPILE);
+    """, con=engine)
+
+    #df_view = pd.read_sql("SELECT * FROM dbo.skila_svuit_highest_grotwh_day OPTION (RECOMPILE);", con=engine)
     write_to_mongo_and_delete(df_view, 'lulim_new', 'skila')
     print('בכרבר')
 
@@ -560,31 +565,37 @@ def update_tarovet():
             date_column = data1[['תאריך']]
 
             # Identify columns that are numeric by their names
-            numeric_columns = [col for col in data1.columns if
-                               col != 'תאריך' and pd.to_numeric(data1[col], errors='coerce').notna().all()]
-            non_numeric_columns = [col for col in data1.columns if col != 'תאריך' and col not in numeric_columns]
+            # Convert column names that are float-like to integers if possible
+
+            new_columns = []
+            for col in data1.columns:
+                try:
+                    # Try converting to float first, then to int if it's a float
+                    col_as_int = int(float(col))
+                    new_columns.append(col_as_int)
+                except (ValueError, TypeError):
+                    # If conversion fails, keep the column name as is
+                    new_columns.append(col)
+
+            # Update the column names with the new list
+            data1.columns = new_columns
+
+            # Now proceed with your numeric_columns check
+            numeric_columns = [col for col in data1.columns if col != 'תאריך' and str(col).isnumeric()]
+
+            numeric_columns = [col for col in data1.columns if col != 'תאריך' and str(col).isnumeric()]
+            non_numeric_columns = [col for col in data1.columns if col != 'תאריך' and not str(col).isnumeric()]
+
 
             # DataFrame with 'תאריך' and numeric columns
+
             data1_numeric = pd.concat([date_column, data1[numeric_columns]], axis=1)
-
-            # DataFrame with 'תאריך' and non-numeric columns
             data1_non_numeric = pd.concat([date_column, data1[non_numeric_columns]], axis=1)
+            data1_non_numeric = data1_non_numeric.dropna(axis=1, how='all')
+            data1_non_numeric ['new_flock'] = 0
+            data1_non_numeric['farm_name']= farm
 
-            print("Numeric DataFrame:")
-            print(data1_numeric.head())
-
-            print("\nNon-numeric DataFrame:")
-            print(data1_non_numeric.head())
-            df_melted = pd.melt(data1_non_numeric, id_vars=['תאריך'], var_name='mivne', value_name='value')
-            farm_name = translate(farm)
-            new_flock = 'new_flock'  # Define the new flock column name
-            df_melted[new_flock] = farms_new_folk[farm]
-            df_melted['farm_name'] = farm_name
-            data1_numeric['farm_name'] = farm_name
-            data1_numeric[new_flock] = farms_new_folk[farm]
-
-            print('wedwdew')
-
+            insert_data_to_sql(data1_non_numeric, 'tarovet')
 
 def update_data():
     farms_names = subfolder_names(excel_prod + farms)
