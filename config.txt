@@ -1,3 +1,0 @@
-excel_prod = 'C:\\Users\\User\\Dropbox\\BMC\\prod'
-excel_test = 'C:\\Users\\User\\Dropbox\\BMC\\test'
-environment = 'prod'
