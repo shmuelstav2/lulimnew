@@ -5,6 +5,7 @@
 import pandas as pd
 import openpyxl
 from sqlalchemy import text
+import pyodbc
 import pandas as pd
 from datetime import datetime, timedelta, date
 from sqlalchemy import create_engine
@@ -305,11 +306,29 @@ def udate_skila():
 
 
 def truncate_flock():
-    with engine.begin() as connection:
-        # Truncate the table once before inserting the rows
-        stmt = text("TRUNCATE TABLE [dbo].[open_farms]")
-        connection.execute(stmt)
+    conn_str = (
+        'DRIVER={ODBC Driver 17 for SQL Server};'
+        'SERVER=lulimdbserver.database.windows.net;'
+        'DATABASE=lulimdb;'
+        'UID=shmuelstav;'
+        'PWD=5tgbgt5@'
+    )
 
+    # URL encoding for connection string
+    params = urllib.parse.quote_plus(conn_str)
+    engine = create_engine(f'mssql+pyodbc:///?odbc_connect={params}')
+    try:
+        # Use `engine.connect()` for a connection and manage transactions explicitly
+        with engine.connect() as connection:
+        #with engine.connect() as connection:
+            # Use `connection.begin()` for transactional safety if required
+            with connection.begin():
+                # Execute the TRUNCATE TABLE statement
+                stmt = text("TRUNCATE TABLE [dbo].[open_farms]")
+                connection.execute(stmt)
+                print("Table [dbo].[open_farms] successfully truncated.")
+    except Exception as e:
+        print(f"Error while truncating the table: {e}")
 
 def add_flock(farm):
     with engine.begin() as connection:
@@ -476,6 +495,63 @@ def udate_tmuta():
                         # Fetch data and write to MongoDB
 
 
+
+
+def insert_data_to_sql_generic(df, table_name):
+    """
+    Inserts data from a DataFrame into a SQL table, handling primary key conflicts.
+
+    Parameters:
+    df (DataFrame): Data to insert.
+    table_name (str): Target table name.
+
+    Returns:
+    None
+    """
+    try:
+        # Step 1: Get the primary keys for the table
+        with engine.connect() as connection:
+            stmt = text("""
+                SELECT COLUMN_NAME
+                FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+                WHERE TABLE_NAME = :table_name
+                AND TABLE_SCHEMA = 'dbo'
+                AND OBJECTPROPERTY(OBJECT_ID(CONSTRAINT_SCHEMA + '.' + CONSTRAINT_NAME), 'IsPrimaryKey') = 1;
+            """)
+            result = connection.execute(stmt, {'table_name': table_name})
+            primary_keys = [row[0] for row in result]
+
+        if not primary_keys:
+            print(f"No primary key found for {table_name}. Inserting data directly.")
+            df.to_sql(table_name, engine, if_exists='append', index=False)
+            return
+
+        # Step 2: Query existing rows to find duplicates
+        query = f"SELECT {', '.join(primary_keys)} FROM {table_name}"
+        existing_rows = pd.read_sql_query(query, engine)
+
+        # Step 3: Remove duplicates from the DataFrame
+        df['teuda'] = df['teuda'].astype(str)
+        existing_rows['teuda'] = existing_rows['teuda'].astype(str)
+        #deduplicated_df = df.merge(existing_rows, on=['teuda','new_flock','תאריך','farm_name','sug_tarovet'], how='left', indicator=True)
+        deduplicated_df = df.merge(existing_rows, on=primary_keys,
+                                   how='left', indicator=True)
+        deduplicated_df = deduplicated_df[deduplicated_df['_merge'] == 'left_only'].drop(columns=['_merge'])
+
+        if deduplicated_df.empty:
+            print(f"No new data to insert into {table_name}.")
+            return
+
+        # Step 4: Insert deduplicated data into the table
+        deduplicated_df.to_sql(table_name, engine, if_exists='append', index=False)
+        print(f"Data successfully inserted into {table_name}.")
+
+    except Exception as e:
+        print(f"Error inserting data into {table_name}: {e}")
+
+
+
+
 def insert_data_to_sql(df, table_name):
     with engine.begin() as connection:
         for _, row in df.iterrows():
@@ -545,9 +621,11 @@ def update_sivuk():
 
 
 def update_tarovet():
+    #truncate_flock()
     farms_names = subfolder_names(excel_prod + farms)
     tmuta_results = pd.DataFrame()
     for farm in farms_names:
+        print('tarovet '+farm)
         # check if excel file has changed
         path = excel_prod + farms + '\\' + farm + excel_middle_name + excel_file_name_finish + farm + excel_end
         data = read_excel(path, sheet_name_tarovet)
@@ -555,8 +633,10 @@ def update_tarovet():
             threshold = 5
             # Delete columns with fewer non-null values than the threshold
             data = data.iloc[2:]
-            data = data.dropna(axis=1, thresh=threshold)
+            #data = data.dropna(axis=1, thresh=threshold)
             data.columns = data.iloc[0]
+            data = data.iloc[1:].reset_index(drop=True)
+
             data = data.dropna(axis=0, thresh=threshold)
 
             data['תאריך'] = pd.to_datetime(data['תאריך'], errors='coerce')
@@ -585,18 +665,49 @@ def update_tarovet():
 
             numeric_columns = [col for col in data1.columns if col != 'תאריך' and str(col).isnumeric()]
             non_numeric_columns = [col for col in data1.columns if col != 'תאריך' and not str(col).isnumeric()]
+            data1.rename(columns={data1.columns[1]: "teuda"}, inplace=True)
+
+            data1_numeric = pd.concat([date_column,data1['teuda'],data1['סוג תערובת'], data1[numeric_columns]], axis=1)
+
+            df_long = pd.melt(
+                data1_numeric,
+                id_vars=["תאריך", "teuda",'סוג תערובת'],  # Include 'teuda' as an id_var
+                var_name="mivne",
+                value_name="value"
+            )
+
+            df_long = df_long.rename(columns={"תאריך": "date"})
+
+            if not data1.empty:
+                df_filtered = df_long[df_long["value"].notna()]
+                df_filtered['value'] = pd.to_numeric(df_filtered['value'], errors='coerce').astype('Int64')
+                new_flock = 'new_flock'  # Define the new flock column name
+
+                try:
+                    df_filtered[new_flock] = farms_new_folk[farm]
+                except Exception as e:
+                    # Optionally, log the error
+                    print(f"Error processing farm {farm}: {e}")
+                    # Skip the current iteration
+                    continue
 
 
-            # DataFrame with 'תאריך' and numeric columns
+                df_filtered[new_flock] = 0
+                df_filtered['farm_name'] = farm  # Assigning the value of the variable 'farm' to 'farm_name'
 
-            data1_numeric = pd.concat([date_column, data1[numeric_columns]], axis=1)
-            data1_non_numeric = pd.concat([date_column, data1[non_numeric_columns]], axis=1)
-            data1_non_numeric = data1_non_numeric.dropna(axis=1, how='all')
-            data1_non_numeric ['new_flock'] = 0
-            data1_non_numeric['farm_name']= farm
 
-            insert_data_to_sql(data1_non_numeric, 'tarovet')
+                # DataFrame with 'תאריך' and numeric columns
 
+                data1_numeric = pd.concat([date_column, data1[numeric_columns]], axis=1)
+                non_numeric_columns[0] = "teuda"
+                data1_non_numeric = pd.concat([date_column, data1[non_numeric_columns]], axis=1)
+                data1_non_numeric = data1_non_numeric.dropna(axis=1, how='all')
+                data1_non_numeric ['new_flock'] = 0
+                data1_non_numeric['farm_name']= farm
+                data1_non_numeric.columns.values[2] = 'sug_tarovet'
+                insert_data_to_sql_generic(data1_non_numeric, 'tarovet')
+                df_filtered.columns.values[2] = 'sug_tarovet'
+                insert_data_to_sql_generic( df_filtered, 'tarovet_mivne')
 def update_data():
     farms_names = subfolder_names(excel_prod + farms)
     tmuta_results = pd.DataFrame()
@@ -801,14 +912,36 @@ def update_views():
     # Assuming write_to_mongo_and_delete is a defined function
     #write_to_mongo_and_delete(df_view, 'lulim_new', 'tmuta')
     write_to_mongo_and_delete(df_view2, 'lulim_new', 'tmuta14')
+    df_view4 = pd.read_sql(
+        "SELECT [farm_name], [new_flock], [begin_date], [status], [end_date], "
+        "[begin_quantity], [mortality14], [percent14_tmuta] FROM [dbo].[summary_by_flock];",
+        con=engine
+    )
+
+    # Write the DataFrame to MongoDB and delete it
+    write_to_mongo_and_delete(df_view4, 'lulim_new', 'sikum_midgar')
+
+    df_view5 = pd.read_sql(
+        "SELECT [farm_name], [new_flock], [house_number],[begin_date], [status], [end_date], "
+        "[begin_quantity], [mortality14], [percent14_tmuta] FROM [dbo].[summary_by_flock_mivne];",
+        con=engine
+    )
+
+    # Write the DataFrame to MongoDB and delete it
+    write_to_mongo_and_delete(df_view5, 'lulim_new', 'sikum_midgar_mivne')
 
 
 # function that calculates diff between 2 dates
 
+
+
+
+
+
 def job():
     try:
         udate_tmuta()
-        #update_tarovet()
+        update_tarovet()
         update_sivuk()
         udate_skila()
         update_views()
@@ -820,6 +953,7 @@ def job():
 def run_program():
     try:
         parser = argparse.ArgumentParser(description="Script to run a job based on environment and command-line arguments")
+        #test_sql_connection()
         parser.add_argument("--param1", type=int, help="Param1")
         args = parser.parse_args()
 
