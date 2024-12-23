@@ -26,8 +26,35 @@ import pymongo
 from pymongo import MongoClient
 from pymongo import MongoClient
 from datetime import datetime, timedelta
+from sqlalchemy.orm import sessionmaker
+import logging
+from sqlalchemy.exc import IntegrityError
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)  # Set the default logging level to INFO
+
+# Suppress SQLAlchemy logs
+logging.getLogger('sqlalchemy.engine').setLevel(logging.WARNING)  # Only show warnings or errors for SQLAlchemy
+
+import warnings
+warnings.simplefilter(action='ignore', category=pd.errors.SettingWithCopyWarning)
 
 
+import warnings
+
+# Suppress warnings from openpyxl
+warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
+
+# Suppress pandas warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="pandas")
+
+class NoSQLAlchemyLogs(logging.Filter):
+    def filter(self, record):
+        return 'sqlalchemy' not in record.name
+
+# Apply the filter to the root logger
+for handler in logging.root.handlers:
+    handler.addFilter(NoSQLAlchemyLogs())
 def read_config(filename='config.txt'):
     script_path = os.path.abspath(__file__)
 
@@ -53,17 +80,22 @@ excel_prod = config.get('excel_prod', '')
 excel_test = config.get('excel_test', '')
 environment = config.get('environment', '')
 days_ago = 7
+# Connection string
 conn_str = (
     'DRIVER={ODBC Driver 17 for SQL Server};'
     'SERVER=lulimdbserver.database.windows.net;'
     'DATABASE=lulimdb;'
     'UID=shmuelstav;'
-    'PWD=5tgbgt5@'
+    'PWD=5tgbgt5@;'
+    'TrustServerCertificate=yes;'
+    'charset=utf8;'
 )
 
-# URL encoding for connection string
+# URL encode the connection string
 params = urllib.parse.quote_plus(conn_str)
-engine = create_engine(f'mssql+pyodbc:///?odbc_connect={params}')
+
+# Create the engine with the connection string
+engine = create_engine(f'mssql+pyodbc:///?odbc_connect={params}', echo=False)
 
 # Print or use the values as needed
 print("Excel Prod:", excel_prod)
@@ -494,22 +526,9 @@ def udate_tmuta():
                         print("No new rows to upsert.")
                         # Fetch data and write to MongoDB
 
-
-
-
 def insert_data_to_sql_generic(df, table_name):
-    """
-    Inserts data from a DataFrame into a SQL table, handling primary key conflicts.
-
-    Parameters:
-    df (DataFrame): Data to insert.
-    table_name (str): Target table name.
-
-    Returns:
-    None
-    """
     try:
-        # Step 1: Get the primary keys for the table
+        # Retrieve primary keys
         with engine.connect() as connection:
             stmt = text("""
                 SELECT COLUMN_NAME
@@ -519,36 +538,164 @@ def insert_data_to_sql_generic(df, table_name):
                 AND OBJECTPROPERTY(OBJECT_ID(CONSTRAINT_SCHEMA + '.' + CONSTRAINT_NAME), 'IsPrimaryKey') = 1;
             """)
             result = connection.execute(stmt, {'table_name': table_name})
-            primary_keys = [row[0] for row in result]
+            primary_keys = [row[0].lower() for row in result]
 
         if not primary_keys:
-            print(f"No primary key found for {table_name}. Inserting data directly.")
-            df.to_sql(table_name, engine, if_exists='append', index=False)
-            return
+            raise ValueError(f"No primary keys found for table {table_name}.")
 
-        # Step 2: Query existing rows to find duplicates
+        # Normalize column names
+        df.columns = df.columns.str.lower()
+
+        # Query existing rows
         query = f"SELECT {', '.join(primary_keys)} FROM {table_name}"
         existing_rows = pd.read_sql_query(query, engine)
+        # Normalize column names in both DataFrames
+        df.columns = df.columns.str.lower()
+        existing_rows.columns = existing_rows.columns.str.lower()
 
-        # Step 3: Remove duplicates from the DataFrame
-        df['teuda'] = df['teuda'].astype(str)
-        existing_rows['teuda'] = existing_rows['teuda'].astype(str)
-        #deduplicated_df = df.merge(existing_rows, on=['teuda','new_flock','תאריך','farm_name','sug_tarovet'], how='left', indicator=True)
-        deduplicated_df = df.merge(existing_rows, on=primary_keys,
-                                   how='left', indicator=True)
+        # Ensure primary keys exist in both DataFrames
+        for key in primary_keys:
+            if key not in df.columns:
+                raise ValueError(f"Primary key '{key}' not found in input DataFrame.")
+            if key not in existing_rows.columns:
+                raise ValueError(f"Primary key '{key}' not found in existing table.")
+
+        # Ensure data types are consistent
+        for key in primary_keys:
+            df[key] = df[key].astype(str)  # Convert to string for consistency
+            existing_rows[key] = existing_rows[key].astype(str)
+
+        # Debug: Print the DataFrames for inspection
+        #print("Input DataFrame (df):")
+        #print(df.head())
+        #print("Existing Rows:")
+        #print(existing_rows.head())
+
+        # Perform deduplication
+        deduplicated_df = df.merge(existing_rows, on=primary_keys, how='left', indicator=True)
+        deduplicated_df = deduplicated_df[deduplicated_df['_merge'] == 'left_only'].drop(columns=['_merge'])
+
+        # Debug: Print deduplicated DataFrame
+        #print("Deduplicated DataFrame:")
+        #print(deduplicated_df)
+
+        if deduplicated_df.empty:
+            print(f"No new data to insert into {table_name}.")
+            return
+        else:
+            print(f"Data ready for insertion into {table_name}.")
+
+        # Insert rows
+        Session = sessionmaker(bind=engine)
+        session = Session()
+        try:
+            for _, row in deduplicated_df.iterrows():
+                stmt = text(f"""
+                    INSERT INTO {table_name} ([תאריך], teuda, sug_tarovet, [כמות בתעודה], [הפרש], [הפרש משקל], new_flock, farm_name)
+                    VALUES (:date, :teuda, :sug_tarovet, :amount, :difference, :weight_diff, :new_flock, :farm_name)
+                """)
+                try:
+                    session.execute(stmt, {
+                        'date': row['תאריך'],
+                        'teuda': row['teuda'],
+                        'sug_tarovet': row['sug_tarovet'],
+                        'amount': row['כמות בתעודה'],
+                        'difference': row['הפרש'],
+                        'weight_diff': row['הפרש משקל'],
+                        'new_flock': row['new_flock'],
+                        'farm_name': row['farm_name']
+                    })
+                except IntegrityError:
+                    print(f"Duplicate detected: {row.to_dict()}")
+                except Exception as row_error:
+                    print(f"Error inserting row: {row.to_dict()} | Error: {row_error}")
+            session.commit()
+            print(f"Data successfully inserted into {table_name}.")
+        except Exception as e:
+            session.rollback()
+            print(f"Error during bulk insert: {e}")
+        finally:
+            session.close()
+
+    except Exception as e:
+        print(f"Error inserting data into {table_name}: {e}")
+
+def insert_data_to_sql_generic1(df, table_name):
+    """
+    Inserts data from a DataFrame into a SQL table, avoiding duplicates and handling schema dynamically.
+    """
+    try:
+        # Retrieve primary keys
+        with engine.connect() as connection:
+            stmt = text("""
+                SELECT COLUMN_NAME
+                FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+                WHERE TABLE_NAME = :table_name
+                AND TABLE_SCHEMA = 'dbo'
+                AND OBJECTPROPERTY(OBJECT_ID(CONSTRAINT_SCHEMA + '.' + CONSTRAINT_NAME), 'IsPrimaryKey') = 1;
+            """)
+            result = connection.execute(stmt, {'table_name': table_name})
+            primary_keys = [row[0].lower() for row in result]
+
+        if not primary_keys:
+            raise ValueError(f"No primary keys found for table {table_name}.")
+
+        # Normalize column names
+        df.columns = df.columns.str.lower()
+
+        # Query existing rows
+        query = f"SELECT {', '.join(primary_keys)} FROM {table_name}"
+        existing_rows = pd.read_sql_query(query, engine)
+        existing_rows.columns = existing_rows.columns.str.lower()
+
+        # Ensure primary keys exist in both DataFrames
+        for key in primary_keys:
+            if key not in df.columns:
+                raise ValueError(f"Primary key '{key}' not found in input DataFrame.")
+            if key not in existing_rows.columns:
+                raise ValueError(f"Primary key '{key}' not found in existing table.")
+
+        # Deduplication
+        deduplicated_df = df.merge(existing_rows, on=primary_keys, how='left', indicator=True)
         deduplicated_df = deduplicated_df[deduplicated_df['_merge'] == 'left_only'].drop(columns=['_merge'])
 
         if deduplicated_df.empty:
             print(f"No new data to insert into {table_name}.")
             return
 
-        # Step 4: Insert deduplicated data into the table
-        deduplicated_df.to_sql(table_name, engine, if_exists='append', index=False)
-        print(f"Data successfully inserted into {table_name}.")
+        # Insert rows
+        Session = sessionmaker(bind=engine)
+        session = Session()
+        try:
+            for _, row in deduplicated_df.iterrows():
+                stmt = text(f"""
+                    INSERT INTO {table_name} ([farm_name], [sug_tarovet], [teuda], [new_flock], [value], [mivne], [date])
+                    VALUES (:farm_name, :sug_tarovet, :teuda, :new_flock, :value, :mivne, :date)
+                """)
+                try:
+                    session.execute(stmt, {
+                        'farm_name': row['farm_name'],
+                        'sug_tarovet': row['sug_tarovet'],
+                        'teuda': row['teuda'],
+                        'new_flock': row['new_flock'],
+                        'value': row['value'],
+                        'mivne': row['mivne'],
+                        'date': row['date']
+                    })
+                except IntegrityError:
+                    print(f"Duplicate detected: {row.to_dict()}")
+                except Exception as row_error:
+                    print(f"Error inserting row: {row.to_dict()} | Error: {row_error}")
+            session.commit()
+            print(f"Data successfully inserted into {table_name}.")
+        except Exception as e:
+            session.rollback()
+            print(f"Error during bulk insert: {e}")
+        finally:
+            session.close()
 
     except Exception as e:
         print(f"Error inserting data into {table_name}: {e}")
-
 
 
 
@@ -692,8 +839,8 @@ def update_tarovet():
                     continue
 
 
-                df_filtered[new_flock] = 0
-                df_filtered['farm_name'] = farm  # Assigning the value of the variable 'farm' to 'farm_name'
+
+                df_filtered['farm_name'] = translate(farm)  # Assigning the value of the variable 'farm' to 'farm_name'
 
 
                 # DataFrame with 'תאריך' and numeric columns
@@ -702,12 +849,17 @@ def update_tarovet():
                 non_numeric_columns[0] = "teuda"
                 data1_non_numeric = pd.concat([date_column, data1[non_numeric_columns]], axis=1)
                 data1_non_numeric = data1_non_numeric.dropna(axis=1, how='all')
-                data1_non_numeric ['new_flock'] = 0
-                data1_non_numeric['farm_name']= farm
+                try:
+                    data1_non_numeric['new_flock'] = farms_new_folk[farm]
+                except Exception as e:
+                    # Optionally, log the error
+                    print(f"Error processing farm {farm}: {e}")
+
+                data1_non_numeric['farm_name']= translate(farm)
                 data1_non_numeric.columns.values[2] = 'sug_tarovet'
                 insert_data_to_sql_generic(data1_non_numeric, 'tarovet')
                 df_filtered.columns.values[2] = 'sug_tarovet'
-                insert_data_to_sql_generic( df_filtered, 'tarovet_mivne')
+                insert_data_to_sql_generic1( df_filtered, 'tarovet_mivne')
 def update_data():
     farms_names = subfolder_names(excel_prod + farms)
     tmuta_results = pd.DataFrame()
@@ -913,8 +1065,25 @@ def update_views():
     #write_to_mongo_and_delete(df_view, 'lulim_new', 'tmuta')
     write_to_mongo_and_delete(df_view2, 'lulim_new', 'tmuta14')
     df_view4 = pd.read_sql(
-        "SELECT [farm_name], [new_flock], [begin_date], [status], [end_date], "
-        "[begin_quantity], [mortality14], [percent14_tmuta] FROM [dbo].[summary_by_flock];",
+        """
+        SELECT 
+            [farm_name], 
+            [new_flock], 
+            [begin_date], 
+            [status], 
+            [end_date], 
+            [begin_quantity], 
+            [mortality14], 
+            [percent14_tmuta], 
+            [total_tarovet], 
+            [total_daily_mortality], 
+            [marketed_quantity], 
+            [total_weight], 
+            [marketing_weight], 
+            [mesukan_weight], 
+            [nezilut_mazon]
+        FROM [dbo].[summary_by_flock];
+        """,
         con=engine
     )
 
@@ -936,10 +1105,37 @@ def update_views():
 
 
 
+def check():
+    from sqlalchemy import text
+
+    with engine.connect() as conn:
+        # Begin a transaction
+        transaction = conn.begin()
+        try:
+            # Insert Hebrew data
+            insert_query = text("""
+                INSERT INTO tarovet ([תאריך], teuda, sug_tarovet, [כמות בתעודה], [הפרש], [הפרש משקל], new_flock, farm_name)
+                VALUES ('2024-12-10', 'sh2431581', 1511, 13520, 0, -13520, 20244, N'גוטליב 2');
+            """)
+            conn.execute(insert_query)
+
+            # Commit the transaction
+            transaction.commit()
+
+            # Retrieve data
+            select_query = text("SELECT farm_name FROM tarovet WHERE farm_name = N'גוטליב 2';")
+            result = conn.execute(select_query)
+            for row in result:
+                print(row)
+        except Exception as e:
+            # Roll back in case of an error
+            transaction.rollback()
+            print(f"An error occurred: {e}")
 
 
 def job():
     try:
+        #check()
         udate_tmuta()
         update_tarovet()
         update_sivuk()
