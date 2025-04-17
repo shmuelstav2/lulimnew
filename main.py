@@ -5,6 +5,10 @@
 import pandas as pd
 import openpyxl
 from sqlalchemy import text
+import urllib
+from sqlalchemy import create_engine
+from sqlalchemy.exc import SQLAlchemyError
+
 import pyodbc
 import pandas as pd
 from datetime import datetime, timedelta, date
@@ -55,19 +59,39 @@ class NoSQLAlchemyLogs(logging.Filter):
 # Apply the filter to the root logger
 for handler in logging.root.handlers:
     handler.addFilter(NoSQLAlchemyLogs())
-def read_config(filename='config.txt'):
-    script_path = os.path.abspath(__file__)
 
-    # Construct the absolute path to config.txt
+
+def read_config(filename='config.txt'):
+    """
+    Reads a key-value configuration from a text file.
+
+    :param filename: Name of the configuration file. Default is 'config.txt'.
+    :return: A dictionary containing configuration key-value pairs.
+    """
+    script_path = os.path.abspath(__file__)
     config_path = os.path.join(os.path.dirname(script_path), filename)
     config = {}
+
+    # Verify that the file exists
+    if not os.path.exists(config_path):
+        print(f"Error: Configuration file '{filename}' not found at {config_path}.")
+        return {}
+
     try:
-        with open(filename, 'r') as file:
+        with open(config_path, 'r') as file:
             for line in file:
-                key, value = line.strip().split('=')
-                config[key.strip()] = value.strip().strip("'\"")  # Remove quotes
+                line = line.strip()
+                # Skip empty lines or comments
+                if not line or line.startswith('#'):
+                    continue
+                try:
+                    key, value = line.split('=', 1)  # Limit split to at most 2 items
+                    config[key.strip()] = value.strip().strip("'\"")  # Remove quotes
+                except ValueError:
+                    print(f"Warning: Skipping malformed line: {line}")
     except Exception as e:
         print(f"Error reading configuration file: {e}")
+        return {}
 
     return config
 
@@ -81,6 +105,7 @@ excel_test = config.get('excel_test', '')
 environment = config.get('environment', '')
 days_ago = 7
 # Connection string
+# Connection string
 conn_str = (
     'DRIVER={ODBC Driver 17 for SQL Server};'
     'SERVER=lulimdbserver.database.windows.net;'
@@ -88,14 +113,15 @@ conn_str = (
     'UID=shmuelstav;'
     'PWD=5tgbgt5@;'
     'TrustServerCertificate=yes;'
-    'charset=utf8;'
+    'Encrypt=yes;'
 )
 
 # URL encode the connection string
 params = urllib.parse.quote_plus(conn_str)
 
-# Create the engine with the connection string
+# Create SQLAlchemy engine
 engine = create_engine(f'mssql+pyodbc:///?odbc_connect={params}', echo=False)
+
 
 # Print or use the values as needed
 print("Excel Prod:", excel_prod)
@@ -416,7 +442,8 @@ def udate_tmuta():
                 # Convert columns to string
                 df_cleaned['farm_name'] = translate(farm)
                 df_cleaned = df_cleaned.drop('farm name', axis=1)
-                df_cleaned['hatchery'] = df_cleaned['hatchery'].astype(str)
+                df_cleaned['hatchery'] = df_cleaned['hatchery'].fillna('Unknown').astype(str)
+
                 df_cleaned['line'] = df_cleaned['line'].astype(str)
 
                 try:  # Convert 'date' to datetime
@@ -1082,7 +1109,7 @@ def update_views():
             [marketing_weight], 
             [mesukan_weight], 
             [nezilut_mazon]
-        FROM [dbo].[summary_by_flock];
+        FROM [dbo].[vw_summary_by_flock_no_nulls];
         """,
         con=engine
     )
@@ -1098,6 +1125,18 @@ def update_views():
 
     # Write the DataFrame to MongoDB and delete it
     write_to_mongo_and_delete(df_view5, 'lulim_new', 'sikum_midgar_mivne')
+
+    df_view6 = pd.read_sql(
+        "SELECT [farm_name], [min_begin_date], [max_end_date], [begin_quantity], "
+        "[total_mortality14], [total_tarovet], [total_marketed_quantity], "
+        "[total_weight], [total_marketing_weight], [percent14_tmuta], [marketing_weight], "
+        "[mesukan_weight], [nezilut_mazon] "
+        "FROM [dbo].[total_summary_2025];",
+        con=engine
+    )
+
+    # Write the DataFrame to MongoDB and delete it
+    write_to_mongo_and_delete(df_view6, 'lulim_new', 'sikum_midgar_summary_2025')
 
 
 # function that calculates diff between 2 dates
