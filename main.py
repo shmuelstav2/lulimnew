@@ -770,7 +770,7 @@ def update_sivuk():
         print('sivuk ' + farm)
         path = excel_prod + farms + '\\' + farm + excel_middle_name + excel_file_name_finish + farm + excel_end
         data = read_excel(path, sheet_name_sivuk)
-        if not data.empty:
+        if not data.empty and farm == 'shaal morad':
             threshold = 5
             # Delete columns with fewer non-null values than the threshold
             data = data.dropna(axis=1, thresh=threshold)
@@ -783,6 +783,8 @@ def update_sivuk():
             if not data.empty:
                 new_flock = 'new_flock'  # Define the new flock column name
                 data[new_flock] = farms_new_folk[farm]
+
+                data['farm name'] = str(translate(farm))
                 sivuk_results = pd.concat([sivuk_results, data], ignore_index=True)
 
                 # Convert the 'marketing date' column to datetime, allowing for mixed formats
