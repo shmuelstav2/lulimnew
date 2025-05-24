@@ -34,6 +34,20 @@ from sqlalchemy.orm import sessionmaker
 import logging
 from sqlalchemy.exc import IntegrityError
 
+
+import logging
+import os
+
+# וודא תיקיית לוגים
+os.makedirs('logs', exist_ok=True)
+
+logging.basicConfig(
+    filename='logs/sivuk_errors.log',
+    filemode='a',
+    format='%(asctime)s %(levelname)s: %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S',
+    level=logging.ERROR
+)
 # Configure logging
 logging.basicConfig(level=logging.INFO)  # Set the default logging level to INFO
 
@@ -766,34 +780,38 @@ def update_sivuk():
     farms_names = subfolder_names(excel_prod + farms)
     sivuk_results = pd.DataFrame()
     for farm in farms_names:
-        # check if excel file has changed
-        print('sivuk ' + farm)
-        path = excel_prod + farms + '\\' + farm + excel_middle_name + excel_file_name_finish + farm + excel_end
-        data = read_excel(path, sheet_name_sivuk)
-        if not data.empty and farm == 'shaal morad':
-            threshold = 5
-            # Delete columns with fewer non-null values than the threshold
-            data = data.dropna(axis=1, thresh=threshold)
-            data = data.dropna(axis=0, thresh=threshold)
-            data.columns = data.iloc[0]
-            data = data.iloc[1:]
-            data = data.reset_index(drop=True)
-            data['neto weight '] = pd.to_numeric(data['neto weight '], errors='coerce')
-            data = data[data['neto weight '] > 0]
+        try:
+            # check if excel file has changed
+            print('sivuk ' + farm)
+            path = excel_prod + farms + '\\' + farm + excel_middle_name + excel_file_name_finish + farm + excel_end
+            data = read_excel(path, sheet_name_sivuk)
             if not data.empty:
-                new_flock = 'new_flock'  # Define the new flock column name
-                data[new_flock] = farms_new_folk[farm]
+                threshold = 5
+                # Delete columns with fewer non-null values than the threshold
+                data = data.dropna(axis=1, thresh=threshold)
+                data = data.dropna(axis=0, thresh=threshold)
+                data.columns = data.iloc[0]
+                data = data.iloc[1:]
+                data = data.reset_index(drop=True)
+                data['neto weight '] = pd.to_numeric(data['neto weight '], errors='coerce')
+                data = data[data['neto weight '] > 0]
+                if not data.empty:
+                    new_flock = 'new_flock'  # Define the new flock column name
+                    data[new_flock] = farms_new_folk[farm]
 
-                data['farm name'] = str(translate(farm))
-                sivuk_results = pd.concat([sivuk_results, data], ignore_index=True)
+                    data['farm name'] = str(translate(farm))
+                    sivuk_results = pd.concat([sivuk_results, data], ignore_index=True)
 
-                # Convert the 'marketing date' column to datetime, allowing for mixed formats
-                sivuk_results['marketing date'] = pd.to_datetime(sivuk_results['marketing date'], errors='coerce')
+                    # Convert the 'marketing date' column to datetime, allowing for mixed formats
+                    sivuk_results['marketing date'] = pd.to_datetime(sivuk_results['marketing date'], errors='coerce')
 
-                # Format the datetime objects to the desired format (YYYY.MM.DD)
-                sivuk_results['marketing date'] = sivuk_results['marketing date'].dt.strftime('%Y.%m.%d')
+                    # Format the datetime objects to the desired format (YYYY.MM.DD)
+                    sivuk_results['marketing date'] = sivuk_results['marketing date'].dt.strftime('%Y.%m.%d')
 
-                insert_data_to_sql(sivuk_results, 'sivuk')
+                    insert_data_to_sql(sivuk_results, 'sivuk')
+        except Exception:
+            logging.error(f"Error in farm '{farm}'", exc_info=True)
+            print(f"Error in farm '{farm}', details written to logs/sivuk_errors.log")
 
 
 def update_tarovet():
@@ -1129,11 +1147,25 @@ def update_views():
     write_to_mongo_and_delete(df_view5, 'lulim_new', 'sikum_midgar_mivne')
 
     df_view6 = pd.read_sql(
-        "SELECT [farm_name], [min_begin_date], [max_end_date], [begin_quantity], "
-        "[total_mortality14], [total_tarovet], [total_marketed_quantity], "
-        "[total_weight], [total_marketing_weight], [percent14_tmuta], [marketing_weight], "
-        "[mesukan_weight], [nezilut_mazon] "
-        "FROM [dbo].[total_summary_2025];",
+        """
+        SELECT [farm_name],
+               [min_begin_date],
+               [max_end_date],
+               [begin_quantity],
+               [total_mortality14],
+               [total_tarovet],
+               [total_marketed_quantity],
+               [total_weight],
+               [total_marketing_weight],
+               [total_daily_mortality],
+               [percent14_tmuta],
+               [marketing_weight],
+               [mesukan_weight],
+               [nezilut_mazon],
+               [avvarage_sivuk_age],
+               [ketzev_gdila_iomi]
+        FROM [dbo].[total_summary_2025]
+        """,
         con=engine
     )
 
