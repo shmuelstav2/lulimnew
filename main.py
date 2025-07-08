@@ -819,6 +819,7 @@ def update_tarovet():
     farms_names = subfolder_names(excel_prod + farms)
     tmuta_results = pd.DataFrame()
     for farm in farms_names:
+
         print('tarovet '+farm)
         # check if excel file has changed
         path = excel_prod + farms + '\\' + farm + excel_middle_name + excel_file_name_finish + farm + excel_end
@@ -874,7 +875,7 @@ def update_tarovet():
 
             if not data1.empty:
                 df_filtered = df_long[df_long["value"].notna()]
-                df_filtered['value'] = pd.to_numeric(df_filtered['value'], errors='coerce').astype('Int64')
+                df_filtered['value'] = pd.to_numeric(df_filtered['value'], errors='coerce')
                 new_flock = 'new_flock'  # Define the new flock column name
 
                 try:
