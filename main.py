@@ -316,9 +316,13 @@ def udate_skila():
             df['avg_mixed'] = pd.to_numeric(df_cleaned['ממוצע מעורב'])
             df['avg_mixed_percent'] = pd.to_numeric(df_cleaned['אחוז תקן מעורב'])
             df['mivne'] = pd.to_numeric(df_cleaned['מבנה'])
-            if not df.empty:
+            try:
                 new_flock = 'new_flock'  # Define the new flock column name
                 df[new_flock] = farms_new_folk[farm]
+            except Exception as e:
+                print(f"Error processing farm {farm}: {e}")
+                continue  # go to the next loop iteration
+
                 # df['midgar'] = 1
                 df['farm_name'] = str(translate(farm))
                 df['avg_mixed'] = df['avg_mixed'].round(3)
