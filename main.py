@@ -141,16 +141,32 @@ engine = create_engine(f'mssql+pyodbc:///?odbc_connect={params}', echo=False)
 print("Excel Prod:", excel_prod)
 print("Excel Test:", excel_test)
 print("Environment:", environment)
+from pathlib import Path
 
-farms = '\\fandy farms'
-reports = '\\current active flocks\\'
+# Define your base Dropbox path once
+# Adjust this if your folder structure differs
+
+
+farms = 'fandy farms'
+reports = 'current active flocks'
+excel_middle_name = 'current flock'
 sheet_name_tmuta = 'tmuta'
 sheet_name_sivuk = 'shivuk'
 sheet_name_skila = 'סיכום שקילות'
 sheet_name_tarovet = 'תערובת'
 excel_file_name_finish = 'current flock '
-excel_end = '.xlsx'''
-excel_middle_name = '\\current flock\\'
+excel_end = '.xlsx'
+
+
+#farms = '\\fandy farms'
+#reports = '\\current active flocks\\'
+#sheet_name_tmuta = 'tmuta'
+#sheet_name_sivuk = 'shivuk'
+#sheet_name_skila = 'סיכום שקילות'
+#sheet_name_tarovet = 'תערובת'
+#excel_file_name_finish = 'current flock '
+#excel_end = '.xlsx'''''
+#excel_middle_name = '\\current flock\\' '''
 
 farms_new_folk = {}
 
@@ -186,6 +202,79 @@ def read_excel(path, sheet_name):
         # Handle any exceptions (e.g., file not found, sheet not found) and return an empty DataFrame
         print(f"An error occurred: {str(e)}")
         return pd.DataFrame()
+
+import time
+from sqlalchemy import text
+import sqlalchemy.exc
+
+def insert_data_to_sql(df, table_name):
+    merge_sql = text("""
+        MERGE INTO dbo.sivuk WITH (ROWLOCK, HOLDLOCK) AS target
+        USING (
+            SELECT 
+                :marketing_date AS marketing_date,
+                :house AS house,
+                :receipt AS receipt,
+                :destination AS destination,
+                :marketed_quantity AS marketed_quantity,
+                :averrage_weight AS averrage_weight,
+                :marketed_age AS marketed_age,
+                :farm_name AS farm_name,
+                :new_flock AS new_flock
+        ) AS source
+        ON target.marketing_date = source.marketing_date
+           AND target.house = source.house
+           AND target.receipt = source.receipt
+           AND target.destination = source.destination
+           AND target.farm_name = source.farm_name
+        WHEN MATCHED THEN
+            UPDATE SET 
+                target.marketed_quantity = source.marketed_quantity,
+                target.marketed_age = source.marketed_age
+        WHEN NOT MATCHED THEN
+            INSERT (
+                marketing_date, house, receipt, destination, marketed_quantity,
+                averrage_weight, marketed_age, farm_name, new_flock
+            )
+            VALUES (
+                source.marketing_date, source.house, source.receipt, source.destination,
+                source.marketed_quantity, source.averrage_weight, source.marketed_age,
+                source.farm_name, source.new_flock
+            );
+    """)
+
+    with engine.connect() as conn:
+        trans = conn.begin()
+        try:
+            for _, row in df.iterrows():
+                params = {
+                    'marketing_date': row.get('marketing date'),
+                    'house': row.get('house'),
+                    'receipt': row.get('receipt'),
+                    'destination': row.get('destination'),
+                    'marketed_quantity': row.get('marketed quantity'),
+                    'averrage_weight': row.get('averrage weight'),
+                    'marketed_age': row.get('marketed age'),
+                    'farm_name': row.get('farm name'),
+                    'new_flock': row.get('new_flock'),
+                }
+
+                for attempt in range(3):
+                    try:
+                        conn.execute(merge_sql, params)
+                        break
+                    except sqlalchemy.exc.DBAPIError as e:
+                        if '1205' in str(e) or 'deadlock' in str(e).lower():
+                            print(f"⚠️ Deadlock — retrying {attempt + 1}/3...")
+                            time.sleep(2)
+                        else:
+                            raise
+            trans.commit()
+        except Exception:
+            trans.rollback()
+            raise
+
+
 
 
 def subfolder_names(path):
@@ -292,7 +381,14 @@ def udate_skila():
     farms_names = subfolder_names(excel_prod + farms)
     tmuta_results = pd.DataFrame()
     for farm in farms_names:
-        path = f"{excel_prod}{farms}\\{farm}{excel_middle_name}{excel_file_name_finish}{farm}{excel_end}"
+        path = os.path.join(
+            excel_prod,
+            farms,
+            farm,
+            excel_middle_name,
+            f"{excel_file_name_finish}{farm}{excel_end}"
+        )
+        #path = f"{excel_prod}{farms}\\{farm}{excel_middle_name}{excel_file_name_finish}{farm}{excel_end}"
         # path = 'C:\\Users\\User\\Dropbox\\BMC\\prod\\fandy farms\\shaal moyal\\current flock\\current flock shaal moyal.xlsx'
         data = read_excel(path, sheet_name_skila)
 
@@ -416,7 +512,7 @@ def add_flock(farm):
 
 
 def udate_tmuta():
-    # run over all the farm files
+
 
     truncate_flock()
 
@@ -424,7 +520,14 @@ def udate_tmuta():
     count = 1
     for farm in farms_names:
 
-        path = f"{excel_prod}{farms}\\{farm}{excel_middle_name}{excel_file_name_finish}{farm}{excel_end}"
+        #path = f"{excel_prod}{farms}\\{farm}{excel_middle_name}{excel_file_name_finish}{farm}{excel_end}"
+        path = os.path.join(
+            excel_prod,
+            farms,
+            farm,
+            excel_middle_name,
+            f"{excel_file_name_finish}{farm}{excel_end}"
+        )
         data = read_excel(path, sheet_name_tmuta)
         if not data.empty:
             # and  count == 1:
@@ -744,6 +847,18 @@ def insert_data_to_sql_generic1(df, table_name):
 
 
 
+
+
+
+
+
+
+
+###
+
+
+
+'''
 def insert_data_to_sql(df, table_name):
     with engine.begin() as connection:
         for _, row in df.iterrows():
@@ -779,6 +894,8 @@ def insert_data_to_sql(df, table_name):
             }
             connection.execute(stmt, params)
 
+'''
+
 
 def update_sivuk():
     farms_names = subfolder_names(excel_prod + farms)
@@ -787,7 +904,14 @@ def update_sivuk():
         try:
             # check if excel file has changed
             print('sivuk ' + farm)
-            path = excel_prod + farms + '\\' + farm + excel_middle_name + excel_file_name_finish + farm + excel_end
+            path = os.path.join(
+                excel_prod,
+                farms,
+                farm,
+                excel_middle_name,
+                f"{excel_file_name_finish}{farm}{excel_end}"
+            )
+            #path = excel_prod + farms + '\\' + farm + excel_middle_name + excel_file_name_finish + farm + excel_end
             data = read_excel(path, sheet_name_sivuk)
             if not data.empty:
                 threshold = 5
@@ -826,7 +950,14 @@ def update_tarovet():
 
         print('tarovet '+farm)
         # check if excel file has changed
-        path = excel_prod + farms + '\\' + farm + excel_middle_name + excel_file_name_finish + farm + excel_end
+        path = os.path.join(
+            excel_prod,
+            farms,
+            farm,
+            excel_middle_name,
+            f"{excel_file_name_finish}{farm}{excel_end}"
+        )
+        #path = excel_prod + farms + '\\' + farm + excel_middle_name + excel_file_name_finish + farm + excel_end
         data = read_excel(path, sheet_name_tarovet)
         if not data.empty:
             threshold = 5
@@ -1261,3 +1392,6 @@ def run_program():
 
 if __name__ == "__main__":
     run_program()
+
+
+
