@@ -412,59 +412,60 @@ def udate_skila():
             df['avg_mixed'] = pd.to_numeric(df_cleaned['ממוצע מעורב'])
             df['avg_mixed_percent'] = pd.to_numeric(df_cleaned['אחוז תקן מעורב'])
             df['mivne'] = pd.to_numeric(df_cleaned['מבנה'])
-            try:
-                new_flock = 'new_flock'  # Define the new flock column name
-                df[new_flock] = farms_new_folk[farm]
-            except Exception as e:
-                print(f"Error processing farm {farm}: {e}")
-                continue  # go to the next loop iteration
+            if not df.empty:
+                try:
+                    new_flock = 'new_flock'  # Define the new flock column name
+                    df[new_flock] = farms_new_folk[farm]
+                except Exception as e:
+                    print(f"Error processing farm {farm}: {e}")
+                    continue  # go to the next loop iteration
 
-                # df['midgar'] = 1
-                df['farm_name'] = str(translate(farm))
-                df['avg_mixed'] = df['avg_mixed'].round(3)
-                df['avg_mixed_percent'] = df['avg_mixed_percent'].round(3)
-                df = df[~((df['avg_mixed'] == 0) & (df['avg_mixed_percent'] == 0))]
+                    # df['midgar'] = 1
+                    df['farm_name'] = str(translate(farm))
+                    df['avg_mixed'] = df['avg_mixed'].round(3)
+                    df['avg_mixed_percent'] = df['avg_mixed_percent'].round(3)
+                    df = df[~((df['avg_mixed'] == 0) & (df['avg_mixed_percent'] == 0))]
 
-                # Load existing data and normalize
-                existing_data = pd.read_sql('SELECT grotwh_day, mivne, new_flock, farm_name FROM skila_svuit',
-                                            con=engine)
-                existing_data = existing_data.astype(
-                    {'grotwh_day': 'int64', 'mivne': 'int64', 'new_flock': 'int64', 'farm_name': 'str'})
-                existing_data.set_index(['grotwh_day', 'mivne', 'new_flock', 'farm_name'], inplace=True)
+                    # Load existing data and normalize
+                    existing_data = pd.read_sql('SELECT grotwh_day, mivne, new_flock, farm_name FROM skila_svuit',
+                                                con=engine)
+                    existing_data = existing_data.astype(
+                        {'grotwh_day': 'int64', 'mivne': 'int64', 'new_flock': 'int64', 'farm_name': 'str'})
+                    existing_data.set_index(['grotwh_day', 'mivne', 'new_flock', 'farm_name'], inplace=True)
 
-                df = df.astype({'grotwh_day': 'int64', 'mivne': 'int64', 'new_flock': 'int64', 'farm_name': 'str'})
-                df.set_index(['grotwh_day', 'mivne', 'new_flock', 'farm_name'], inplace=True)
+                    df = df.astype({'grotwh_day': 'int64', 'mivne': 'int64', 'new_flock': 'int64', 'farm_name': 'str'})
+                    df.set_index(['grotwh_day', 'mivne', 'new_flock', 'farm_name'], inplace=True)
 
-                # Identify new rows
-                new_rows = df[~df.index.isin(existing_data.index)].reset_index()
+                    # Identify new rows
+                    new_rows = df[~df.index.isin(existing_data.index)].reset_index()
 
-                # Upsert logic: Insert new rows and update existing ones
-                if not new_rows.empty:
-                    with engine.begin() as connection:
-                        for _, row in new_rows.iterrows():
-                            stmt = text("""
-                            MERGE INTO skila_svuit AS target
-                            USING (SELECT :grotwh_day AS grotwh_day, :mivne AS mivne, :new_flock AS new_flock, :farm_name AS farm_name) AS source
-                            ON target.grotwh_day = source.grotwh_day AND target.mivne = source.mivne AND target.new_flock = source.new_flock AND target.farm_name = source.farm_name
-                            WHEN MATCHED THEN
-                                UPDATE SET avg_mixed = :avg_mixed, avg_mixed_percent = :avg_mixed_percent
-                            WHEN NOT MATCHED THEN
-                                INSERT (grotwh_day, mivne, new_flock, farm_name, avg_mixed, avg_mixed_percent)
-                                VALUES (:grotwh_day, :mivne, :new_flock, :farm_name, :avg_mixed, :avg_mixed_percent);
-                            """)
-                            params = {
-                                'grotwh_day': row['grotwh_day'],
-                                'mivne': row['mivne'],
-                                'new_flock': row['new_flock'],
-                                'farm_name': row['farm_name'],
-                                'avg_mixed': row['avg_mixed'],
-                                'avg_mixed_percent': row['avg_mixed_percent']
-                            }
-                            connection.execute(stmt, params)  # Use params dictionary
-                    print(f"Upserted rows successfully for {farm}.")
+                    # Upsert logic: Insert new rows and update existing ones
+                    if not new_rows.empty:
+                        with engine.begin() as connection:
+                            for _, row in new_rows.iterrows():
+                                stmt = text("""
+                                MERGE INTO skila_svuit AS target
+                                USING (SELECT :grotwh_day AS grotwh_day, :mivne AS mivne, :new_flock AS new_flock, :farm_name AS farm_name) AS source
+                                ON target.grotwh_day = source.grotwh_day AND target.mivne = source.mivne AND target.new_flock = source.new_flock AND target.farm_name = source.farm_name
+                                WHEN MATCHED THEN
+                                    UPDATE SET avg_mixed = :avg_mixed, avg_mixed_percent = :avg_mixed_percent
+                                WHEN NOT MATCHED THEN
+                                    INSERT (grotwh_day, mivne, new_flock, farm_name, avg_mixed, avg_mixed_percent)
+                                    VALUES (:grotwh_day, :mivne, :new_flock, :farm_name, :avg_mixed, :avg_mixed_percent);
+                                """)
+                                params = {
+                                    'grotwh_day': row['grotwh_day'],
+                                    'mivne': row['mivne'],
+                                    'new_flock': row['new_flock'],
+                                    'farm_name': row['farm_name'],
+                                    'avg_mixed': row['avg_mixed'],
+                                    'avg_mixed_percent': row['avg_mixed_percent']
+                                }
+                                connection.execute(stmt, params)  # Use params dictionary
+                        print(f"Upserted rows successfully for {farm}.")
 
-                else:
-                    print(f"No new rows to upsert for {farm}.")
+                    else:
+                        print(f"No new rows to upsert for {farm}.")
 
     # Fetch data and write to MongoDB
     df_view = pd.read_sql("""
