@@ -230,6 +230,7 @@ def insert_data_to_sql(df, table_name):
         WHEN MATCHED THEN
             UPDATE SET 
                 target.marketed_quantity = source.marketed_quantity,
+                target.averrage_weight = source.averrage_weight,
                 target.marketed_age = source.marketed_age
         WHEN NOT MATCHED THEN
             INSERT (
@@ -246,14 +247,122 @@ def insert_data_to_sql(df, table_name):
     with engine.connect() as conn:
         trans = conn.begin()
         try:
-            for _, row in df.iterrows():
+            if not df.empty:
+                # Normalize column names (strip whitespace) - this should already be done in update_sivuk, but double-check
+                df.columns = df.columns.str.strip()
+                # Check for averrage weight column variations (normalized, no trailing spaces now)
+                weight_col_variations = ['averrage weight', 'average weight', 'משקל ממוצע']  # Last one is Hebrew
+                found_weight_col = None
+                for col in weight_col_variations:
+                    if col in df.columns:
+                        found_weight_col = col
+                        break
+                if found_weight_col is None:
+                    # Try to find any column containing 'weight' or 'משקל'
+                    for col in df.columns:
+                        col_lower = str(col).lower()
+                        if 'weight' in col_lower or 'משקל' in str(col):
+                            found_weight_col = col
+                            break
+                if found_weight_col is None:
+                    print(f"WARNING: Could not find averrage weight column. Available columns: {list(df.columns)}")
+            
+            # Store the found weight column name for reuse
+            weight_col_name = found_weight_col if found_weight_col else None
+            if weight_col_name is None:
+                # Try to find any column containing 'weight' or 'משקל' (Hebrew for weight)
+                for col in df.columns:
+                    col_str = str(col).strip().lower()
+                    if 'weight' in col_str or 'משקל' in str(col):
+                        weight_col_name = col
+                        break
+            
+            none_count = 0
+            total_count = 0
+            for idx, row in df.iterrows():
+                total_count += 1
+                # Handle averrage_weight - try multiple variations
+                # NOTE: Even if the Excel file has a weight column, it may contain:
+                # - Empty cells (which become NaN in pandas)
+                # - Non-numeric values (strings, errors)
+                # - NaN values from data processing
+                # This is why we need multiple fallback strategies and validation
+                averrage_weight = None
+                
+                # First, try to get from weight column if it exists
+                if weight_col_name and weight_col_name in row:
+                    weight_value = row[weight_col_name]
+                    # Check if it's a valid numeric value (not NaN, not None, not empty)
+                    if pd.notna(weight_value) and weight_value is not None and weight_value != '':
+                        try:
+                            averrage_weight = float(weight_value)
+                        except (ValueError, TypeError):
+                            averrage_weight = None
+                
+                # If not found, try common variations
+                if averrage_weight is None or pd.isna(averrage_weight):
+                    for col_var in ['averrage weight', 'average weight']:
+                        if col_var in row:
+                            weight_value = row[col_var]
+                            if pd.notna(weight_value) and weight_value is not None and weight_value != '':
+                                try:
+                                    averrage_weight = float(weight_value)
+                                    break
+                                except (ValueError, TypeError):
+                                    continue
+                
+                # If still None/NaN, try to calculate from neto weight / marketed quantity
+                if averrage_weight is None or pd.isna(averrage_weight):
+                    none_count += 1
+                    # Try normalized column names first (after strip)
+                    neto_weight = row.get('neto weight') or row.get('neto weight ') or row.get('net weight')
+                    marketed_qty = row.get('marketed quantity') or row.get('marketed quantity ') or row.get('quantity')
+                    
+                    # Convert to numeric, handling NaN
+                    if pd.notna(neto_weight) and pd.notna(marketed_qty):
+                        try:
+                            neto_weight = float(neto_weight)
+                            marketed_qty = float(marketed_qty)
+                            if marketed_qty > 0 and neto_weight > 0:
+                                averrage_weight = neto_weight / marketed_qty
+                                # Check for invalid results (inf, -inf, NaN)
+                                if pd.isna(averrage_weight) or np.isinf(averrage_weight):
+                                    averrage_weight = 0.0
+                                else:
+                                    averrage_weight = float(averrage_weight)
+                            else:
+                                averrage_weight = 0.0
+                        except (ValueError, TypeError, ZeroDivisionError):
+                            averrage_weight = 0.0
+                    else:
+                        averrage_weight = 0.0
+                    
+                    if averrage_weight == 0.0 and none_count <= 3:
+                        print(f"WARNING: Row {idx} - averrage_weight calculated/set to 0. neto_weight={neto_weight}, marketed_qty={marketed_qty}")
+                        print(f"         Row data: farm={row.get('farm name')}, receipt={row.get('receipt')}, date={row.get('marketing date')}")
+                
+                # Final safeguard: ensure averrage_weight is always a valid numeric value (never None or NaN)
+                if averrage_weight is None or pd.isna(averrage_weight) or np.isinf(averrage_weight):
+                    averrage_weight = 0.0
+                    if none_count <= 3:
+                        print(f"WARNING: Row {idx} - averrage_weight was still invalid after processing. Setting to 0.0")
+                
+                # Ensure it's a valid float (final check)
+                try:
+                    averrage_weight = float(averrage_weight)
+                    # Handle edge cases
+                    if pd.isna(averrage_weight) or np.isinf(averrage_weight):
+                        averrage_weight = 0.0
+                except (ValueError, TypeError):
+                    averrage_weight = 0.0
+            
                 params = {
                     'marketing_date': row.get('marketing date'),
                     'house': row.get('house'),
                     'receipt': row.get('receipt'),
                     'destination': row.get('destination'),
                     'marketed_quantity': row.get('marketed quantity'),
-                    'averrage_weight': row.get('averrage weight'),
+                    'averrage_weight': averrage_weight,
                     'marketed_age': row.get('marketed age'),
                     'farm_name': row.get('farm name'),
                     'new_flock': row.get('new_flock'),
@@ -269,6 +378,11 @@ def insert_data_to_sql(df, table_name):
                             time.sleep(2)
                         else:
                             raise
+            
+            # Print summary after processing all rows
+            if none_count > 0:
+                print(f"WARNING: Found {none_count} rows out of {total_count} with None averrage_weight values (calculated or set to 0)")
+            
             trans.commit()
         except Exception:
             trans.rollback()
@@ -312,7 +426,8 @@ def translate(farm):
         'gazit': 'גזית',
         'sadmot dvora': 'שדמות דבורה',
         'mawiya': 'מעאוויה',
-        'sharona': 'שרונה'
+        'sharona': 'שרונה',
+        'ein iron':'עין עירון'
         # Add more translations as needed
     }
 
@@ -922,8 +1037,15 @@ def update_sivuk():
                 data.columns = data.iloc[0]
                 data = data.iloc[1:]
                 data = data.reset_index(drop=True)
-                data['neto weight '] = pd.to_numeric(data['neto weight '], errors='coerce')
-                data = data[data['neto weight '] > 0]
+                # Normalize column names by stripping leading/trailing whitespace
+                data.columns = data.columns.str.strip()
+                # Use 'neto weight' (normalized, no trailing space) if available, otherwise try 'neto weight '
+                neto_weight_col = 'neto weight' if 'neto weight' in data.columns else 'neto weight '
+                if neto_weight_col not in data.columns:
+                    print(f"WARNING: Could not find 'neto weight' column. Available columns: {list(data.columns)}")
+                    continue
+                data[neto_weight_col] = pd.to_numeric(data[neto_weight_col], errors='coerce')
+                data = data[data[neto_weight_col] > 0]
                 if not data.empty:
                     new_flock = 'new_flock'  # Define the new flock column name
                     data[new_flock] = farms_new_folk[farm]

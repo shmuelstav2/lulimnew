@@ -1,0 +1,5 @@
+excel_prod = "/Users/shmuelstav/Dropbox/BMC/prod/"
+excel_test = "/Users/shmuelstav/Dropbox/BMC/prod/"
+environment = 'prod'
+
+

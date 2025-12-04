@@ -1,0 +1,480 @@
+2025-10-10 15:20:57 ERROR: Error in farm 'megadim'
+Traceback (most recent call last):
+  File "/Users/shmuelstav/lulimnew/main.py", line 928, in update_sivuk
+    data[new_flock] = farms_new_folk[farm]
+                      ~~~~~~~~~~~~~~^^^^^^
+KeyError: 'megadim'
+2025-10-10 15:33:00 ERROR: Error in farm 'megadim'
+Traceback (most recent call last):
+  File "/Users/shmuelstav/lulimnew/main.py", line 928, in update_sivuk
+    data[new_flock] = farms_new_folk[farm]
+                      ~~~~~~~~~~~~~~^^^^^^
+KeyError: 'megadim'
+2025-10-10 15:35:47 ERROR: Error in farm 'megadim'
+Traceback (most recent call last):
+  File "/Users/shmuelstav/lulimnew/main.py", line 928, in update_sivuk
+    data[new_flock] = farms_new_folk[farm]
+                      ~~~~~~~~~~~~~~^^^^^^
+KeyError: 'megadim'
+2025-10-10 15:37:09 ERROR: Error in farm 'megadim'
+Traceback (most recent call last):
+  File "/Users/shmuelstav/lulimnew/main.py", line 928, in update_sivuk
+    data[new_flock] = farms_new_folk[farm]
+                      ~~~~~~~~~~~~~~^^^^^^
+KeyError: 'megadim'
+2025-10-10 15:39:17 ERROR: Error in farm 'megadim'
+Traceback (most recent call last):
+  File "/Users/shmuelstav/lulimnew/main.py", line 929, in update_sivuk
+    data[new_flock] = farms_new_folk[farm]
+                      ~~~~~~~~~~~~~~^^^^^^
+KeyError: 'megadim'
+2025-10-12 07:55:00 ERROR: Error in farm 'megadim'
+Traceback (most recent call last):
+  File "/Users/shmuelstav/lulimnew/main.py", line 929, in update_sivuk
+    data[new_flock] = farms_new_folk[farm]
+                      ~~~~~~~~~~~~~~^^^^^^
+KeyError: 'megadim'
+2025-12-04 22:34:21 ERROR: Error in farm 'kalanit'
+Traceback (most recent call last):
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        cursor, str_statement, effective_parameters, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/sqlalchemy/engine/default.py", line 951, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+pyodbc.IntegrityError: ('23000', "[23000] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Cannot insert the value NULL into column 'averrage_weight', table 'lulimdb.dbo.sivuk'; column does not allow nulls. UPDATE fails. (515) (SQLExecDirectW)")
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/shmuelstav/lulimnew/main.py", line 940, in update_sivuk
+    insert_data_to_sql(sivuk_results, 'sivuk')
+    ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/shmuelstav/lulimnew/main.py", line 264, in insert_data_to_sql
+    conn.execute(merge_sql, params)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1419, in execute
+    return meth(
+        self,
+        distilled_parameters,
+        execution_options or NO_OPTIONS,
+    )
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/sqlalchemy/sql/elements.py", line 526, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        self, distilled_params, execution_options
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1641, in _execute_clauseelement
+    ret = self._execute_context(
+        dialect,
+    ...<8 lines>...
+        cache_hit=cache_hit,
+    )
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^
+        dialect, context, statement, parameters
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        e, str_statement, effective_parameters, cursor, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 2355, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        cursor, str_statement, effective_parameters, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/sqlalchemy/engine/default.py", line 951, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+sqlalchemy.exc.IntegrityError: (pyodbc.IntegrityError) ('23000', "[23000] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Cannot insert the value NULL into column 'averrage_weight', table 'lulimdb.dbo.sivuk'; column does not allow nulls. UPDATE fails. (515) (SQLExecDirectW)")
+[SQL: 
+        MERGE INTO dbo.sivuk WITH (ROWLOCK, HOLDLOCK) AS target
+        USING (
+            SELECT 
+                ? AS marketing_date,
+                ? AS house,
+                ? AS receipt,
+                ? AS destination,
+                ? AS marketed_quantity,
+                ? AS averrage_weight,
+                ? AS marketed_age,
+                ? AS farm_name,
+                ? AS new_flock
+        ) AS source
+        ON target.marketing_date = source.marketing_date
+           AND target.house = source.house
+           AND target.receipt = source.receipt
+           AND target.destination = source.destination
+           AND target.farm_name = source.farm_name
+        WHEN MATCHED THEN
+            UPDATE SET 
+                target.marketed_quantity = source.marketed_quantity,
+                target.marketed_age = source.marketed_age
+        WHEN NOT MATCHED THEN
+            INSERT (
+                marketing_date, house, receipt, destination, marketed_quantity,
+                averrage_weight, marketed_age, farm_name, new_flock
+            )
+            VALUES (
+                source.marketing_date, source.house, source.receipt, source.destination,
+                source.marketed_quantity, source.averrage_weight, source.marketed_age,
+                source.farm_name, source.new_flock
+            );
+    ]
+[parameters: ('2025.11.12', 2, 13463, 'פנדי עוף', 4100, None, 42, 'כלנית', 20254)]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+2025-12-04 22:34:21 ERROR: Error in farm 'megadim'
+Traceback (most recent call last):
+  File "/Users/shmuelstav/lulimnew/main.py", line 929, in update_sivuk
+    data[new_flock] = farms_new_folk[farm]
+                      ~~~~~~~~~~~~~~^^^^^^
+KeyError: 'megadim'
+2025-12-04 22:34:22 ERROR: Error in farm 'ranen'
+Traceback (most recent call last):
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        cursor, str_statement, effective_parameters, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/sqlalchemy/engine/default.py", line 951, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+pyodbc.IntegrityError: ('23000', "[23000] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Cannot insert the value NULL into column 'averrage_weight', table 'lulimdb.dbo.sivuk'; column does not allow nulls. UPDATE fails. (515) (SQLExecDirectW)")
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/shmuelstav/lulimnew/main.py", line 940, in update_sivuk
+    insert_data_to_sql(sivuk_results, 'sivuk')
+    ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/shmuelstav/lulimnew/main.py", line 264, in insert_data_to_sql
+    conn.execute(merge_sql, params)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1419, in execute
+    return meth(
+        self,
+        distilled_parameters,
+        execution_options or NO_OPTIONS,
+    )
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/sqlalchemy/sql/elements.py", line 526, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        self, distilled_params, execution_options
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1641, in _execute_clauseelement
+    ret = self._execute_context(
+        dialect,
+    ...<8 lines>...
+        cache_hit=cache_hit,
+    )
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^
+        dialect, context, statement, parameters
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        e, str_statement, effective_parameters, cursor, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 2355, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        cursor, str_statement, effective_parameters, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/sqlalchemy/engine/default.py", line 951, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+sqlalchemy.exc.IntegrityError: (pyodbc.IntegrityError) ('23000', "[23000] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Cannot insert the value NULL into column 'averrage_weight', table 'lulimdb.dbo.sivuk'; column does not allow nulls. UPDATE fails. (515) (SQLExecDirectW)")
+[SQL: 
+        MERGE INTO dbo.sivuk WITH (ROWLOCK, HOLDLOCK) AS target
+        USING (
+            SELECT 
+                ? AS marketing_date,
+                ? AS house,
+                ? AS receipt,
+                ? AS destination,
+                ? AS marketed_quantity,
+                ? AS averrage_weight,
+                ? AS marketed_age,
+                ? AS farm_name,
+                ? AS new_flock
+        ) AS source
+        ON target.marketing_date = source.marketing_date
+           AND target.house = source.house
+           AND target.receipt = source.receipt
+           AND target.destination = source.destination
+           AND target.farm_name = source.farm_name
+        WHEN MATCHED THEN
+            UPDATE SET 
+                target.marketed_quantity = source.marketed_quantity,
+                target.marketed_age = source.marketed_age
+        WHEN NOT MATCHED THEN
+            INSERT (
+                marketing_date, house, receipt, destination, marketed_quantity,
+                averrage_weight, marketed_age, farm_name, new_flock
+            )
+            VALUES (
+                source.marketing_date, source.house, source.receipt, source.destination,
+                source.marketed_quantity, source.averrage_weight, source.marketed_age,
+                source.farm_name, source.new_flock
+            );
+    ]
+[parameters: ('2025.11.12', 2, 13463, 'פנדי עוף', 4100, None, 42, 'כלנית', 20254)]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+2025-12-04 22:34:23 ERROR: Error in farm 'gotliv 4'
+Traceback (most recent call last):
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        cursor, str_statement, effective_parameters, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/sqlalchemy/engine/default.py", line 951, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+pyodbc.IntegrityError: ('23000', "[23000] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Cannot insert the value NULL into column 'averrage_weight', table 'lulimdb.dbo.sivuk'; column does not allow nulls. UPDATE fails. (515) (SQLExecDirectW)")
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/shmuelstav/lulimnew/main.py", line 940, in update_sivuk
+    insert_data_to_sql(sivuk_results, 'sivuk')
+    ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/shmuelstav/lulimnew/main.py", line 264, in insert_data_to_sql
+    conn.execute(merge_sql, params)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1419, in execute
+    return meth(
+        self,
+        distilled_parameters,
+        execution_options or NO_OPTIONS,
+    )
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/sqlalchemy/sql/elements.py", line 526, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        self, distilled_params, execution_options
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1641, in _execute_clauseelement
+    ret = self._execute_context(
+        dialect,
+    ...<8 lines>...
+        cache_hit=cache_hit,
+    )
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^
+        dialect, context, statement, parameters
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        e, str_statement, effective_parameters, cursor, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 2355, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        cursor, str_statement, effective_parameters, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/sqlalchemy/engine/default.py", line 951, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+sqlalchemy.exc.IntegrityError: (pyodbc.IntegrityError) ('23000', "[23000] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Cannot insert the value NULL into column 'averrage_weight', table 'lulimdb.dbo.sivuk'; column does not allow nulls. UPDATE fails. (515) (SQLExecDirectW)")
+[SQL: 
+        MERGE INTO dbo.sivuk WITH (ROWLOCK, HOLDLOCK) AS target
+        USING (
+            SELECT 
+                ? AS marketing_date,
+                ? AS house,
+                ? AS receipt,
+                ? AS destination,
+                ? AS marketed_quantity,
+                ? AS averrage_weight,
+                ? AS marketed_age,
+                ? AS farm_name,
+                ? AS new_flock
+        ) AS source
+        ON target.marketing_date = source.marketing_date
+           AND target.house = source.house
+           AND target.receipt = source.receipt
+           AND target.destination = source.destination
+           AND target.farm_name = source.farm_name
+        WHEN MATCHED THEN
+            UPDATE SET 
+                target.marketed_quantity = source.marketed_quantity,
+                target.marketed_age = source.marketed_age
+        WHEN NOT MATCHED THEN
+            INSERT (
+                marketing_date, house, receipt, destination, marketed_quantity,
+                averrage_weight, marketed_age, farm_name, new_flock
+            )
+            VALUES (
+                source.marketing_date, source.house, source.receipt, source.destination,
+                source.marketed_quantity, source.averrage_weight, source.marketed_age,
+                source.farm_name, source.new_flock
+            );
+    ]
+[parameters: ('2025.11.12', 2, 13463, 'פנדי עוף', 4100, None, 42, 'כלנית', 20254)]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+2025-12-04 22:34:24 ERROR: Error in farm 'gotliv 2'
+Traceback (most recent call last):
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        cursor, str_statement, effective_parameters, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/sqlalchemy/engine/default.py", line 951, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+pyodbc.IntegrityError: ('23000', "[23000] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Cannot insert the value NULL into column 'averrage_weight', table 'lulimdb.dbo.sivuk'; column does not allow nulls. UPDATE fails. (515) (SQLExecDirectW)")
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/shmuelstav/lulimnew/main.py", line 940, in update_sivuk
+    insert_data_to_sql(sivuk_results, 'sivuk')
+    ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/shmuelstav/lulimnew/main.py", line 264, in insert_data_to_sql
+    conn.execute(merge_sql, params)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1419, in execute
+    return meth(
+        self,
+        distilled_parameters,
+        execution_options or NO_OPTIONS,
+    )
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/sqlalchemy/sql/elements.py", line 526, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        self, distilled_params, execution_options
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1641, in _execute_clauseelement
+    ret = self._execute_context(
+        dialect,
+    ...<8 lines>...
+        cache_hit=cache_hit,
+    )
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^
+        dialect, context, statement, parameters
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        e, str_statement, effective_parameters, cursor, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 2355, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        cursor, str_statement, effective_parameters, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/sqlalchemy/engine/default.py", line 951, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+sqlalchemy.exc.IntegrityError: (pyodbc.IntegrityError) ('23000', "[23000] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Cannot insert the value NULL into column 'averrage_weight', table 'lulimdb.dbo.sivuk'; column does not allow nulls. UPDATE fails. (515) (SQLExecDirectW)")
+[SQL: 
+        MERGE INTO dbo.sivuk WITH (ROWLOCK, HOLDLOCK) AS target
+        USING (
+            SELECT 
+                ? AS marketing_date,
+                ? AS house,
+                ? AS receipt,
+                ? AS destination,
+                ? AS marketed_quantity,
+                ? AS averrage_weight,
+                ? AS marketed_age,
+                ? AS farm_name,
+                ? AS new_flock
+        ) AS source
+        ON target.marketing_date = source.marketing_date
+           AND target.house = source.house
+           AND target.receipt = source.receipt
+           AND target.destination = source.destination
+           AND target.farm_name = source.farm_name
+        WHEN MATCHED THEN
+            UPDATE SET 
+                target.marketed_quantity = source.marketed_quantity,
+                target.marketed_age = source.marketed_age
+        WHEN NOT MATCHED THEN
+            INSERT (
+                marketing_date, house, receipt, destination, marketed_quantity,
+                averrage_weight, marketed_age, farm_name, new_flock
+            )
+            VALUES (
+                source.marketing_date, source.house, source.receipt, source.destination,
+                source.marketed_quantity, source.averrage_weight, source.marketed_age,
+                source.farm_name, source.new_flock
+            );
+    ]
+[parameters: ('2025.11.12', 2, 13463, 'פנדי עוף', 4100, None, 42, 'כלנית', 20254)]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+2025-12-04 22:43:15 ERROR: Error in farm 'megadim'
+Traceback (most recent call last):
+  File "/Users/shmuelstav/lulimnew/main.py", line 997, in update_sivuk
+    data[new_flock] = farms_new_folk[farm]
+                      ~~~~~~~~~~~~~~^^^^^^
+KeyError: 'megadim'
+2025-12-04 22:47:27 ERROR: Error in farm 'megadim'
+Traceback (most recent call last):
+  File "/Users/shmuelstav/lulimnew/main.py", line 1013, in update_sivuk
+    data[new_flock] = farms_new_folk[farm]
+                      ~~~~~~~~~~~~~~^^^^^^
+KeyError: 'megadim'
+2025-12-04 22:51:34 ERROR: Error in farm 'megadim'
+Traceback (most recent call last):
+  File "/Users/shmuelstav/lulimnew/main.py", line 1015, in update_sivuk
+    data[new_flock] = farms_new_folk[farm]
+                      ~~~~~~~~~~~~~~^^^^^^
+KeyError: 'megadim'
