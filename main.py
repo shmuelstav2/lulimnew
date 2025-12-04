@@ -247,13 +247,14 @@ def insert_data_to_sql(df, table_name):
         trans = conn.begin()
         try:
             for _, row in df.iterrows():
+                print(row.get('averrage weight'))
                 params = {
                     'marketing_date': row.get('marketing date'),
                     'house': row.get('house'),
                     'receipt': row.get('receipt'),
                     'destination': row.get('destination'),
                     'marketed_quantity': row.get('marketed quantity'),
-                    'averrage_weight': row.get('averrage weight'),
+                    'averrage_weight': round(row.get('averrage weight'), 5),
                     'marketed_age': row.get('marketed age'),
                     'farm_name': row.get('farm name'),
                     'new_flock': row.get('new_flock'),
