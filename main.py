@@ -658,10 +658,11 @@ def udate_tmuta():
                 # Delete columns with fewer non-null values than the threshold
                 df_cleaned = df_cleaned.dropna(axis=1, thresh=threshold)
                 df_cleaned = df_cleaned.dropna(axis=0, thresh=threshold)
-                df_cleaned.columns = df_cleaned.iloc[0]
-                df_cleaned = df_cleaned.iloc[1:]
-                df_cleaned = df_cleaned.reset_index(drop=True)
-                df_cleaned = df_cleaned[df_cleaned['mixed daily mortality'] > 0]
+                if not df_cleaned.empty:
+                    df_cleaned.columns = df_cleaned.iloc[0]
+                    df_cleaned = df_cleaned.iloc[1:]
+                    df_cleaned = df_cleaned.reset_index(drop=True)
+                    df_cleaned = df_cleaned[df_cleaned['mixed daily mortality'] > 0]
 
             if not df_cleaned.empty:
                 # Create new DataFrame for SQL
@@ -1208,27 +1209,28 @@ def update_data():
             # Delete columns with fewer non-null values than the threshold
             data = data.dropna(axis=1, thresh=threshold)
             data = data.dropna(axis=0, thresh=threshold)
-            data.columns = data.iloc[0]
-            data = data.iloc[1:]
-            data = data.reset_index(drop=True)
-            data['neto weight '] = pd.to_numeric(data['neto weight '], errors='coerce')
-            data = data[data['neto weight '] > 0]
-            client = MongoClient('mongodb://localhost:27017/')
-            db = client['lulim_new']
-            collection = db['sivuk']
+            if not data.empty:
+                data.columns = data.iloc[0]
+                data = data.iloc[1:]
+                data = data.reset_index(drop=True)
+                data['neto weight '] = pd.to_numeric(data['neto weight '], errors='coerce')
+                data = data[data['neto weight '] > 0]
+                client = MongoClient('mongodb://localhost:27017/')
+                db = client['lulim_new']
+                collection = db['sivuk']
 
-            # Iterate over DataFrame rows
-            for index, row in data.iterrows():
-                # Check if the row already exists in the collection
-                existing_row = collection.find_one(row.to_dict())
-                if existing_row is None:
-                    # Insert the row into the collection
-                    collection.insert_one(row.to_dict())
-                    print("Inserted row:", row.to_dict())
-                else:
-                    print("Row already exists:", row.to_dict())
+                # Iterate over DataFrame rows
+                for index, row in data.iterrows():
+                    # Check if the row already exists in the collection
+                    existing_row = collection.find_one(row.to_dict())
+                    if existing_row is None:
+                        # Insert the row into the collection
+                        collection.insert_one(row.to_dict())
+                        print("Inserted row:", row.to_dict())
+                    else:
+                        print("Row already exists:", row.to_dict())
 
-            print("Data insertion completed.")
+                print("Data insertion completed.")
 
 
 def update_results():
